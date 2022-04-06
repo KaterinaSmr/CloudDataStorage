@@ -14,7 +14,10 @@ import server.ServerCommands;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.net.Socket;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
+
 
 public class LoginWindow implements ServerCommands {
     @FXML
@@ -25,7 +28,7 @@ public class LoginWindow implements ServerCommands {
     Button btnLogin;
     @FXML
     Label label;
-    private Socket socket;
+    private SocketChannel socket;
     private final String ADDR = "localhost";
     private final int PORT = 8189;
     private DataInputStream in;
@@ -36,8 +39,17 @@ public class LoginWindow implements ServerCommands {
         System.out.println("login pressed");
         try {
             send(AUTH + " " + loginField.getText() + " " + passwordField.getText());
-            String s = in.readUTF();
-            System.out.println(s);
+
+            ByteBuffer buffer = ByteBuffer.allocate(256);
+            socket.read(buffer);
+            buffer.rewind();
+            System.out.println("position " + buffer.position() + " limit : " +  buffer.limit());
+            String s = new String();
+            while (buffer.hasRemaining()){
+                s += (char) buffer.get();
+            }
+
+            System.out.println("ответ:  " + s);
             if (s.startsWith(AUTHOK)){
                 openMainWindow();
             } else {
@@ -50,16 +62,18 @@ public class LoginWindow implements ServerCommands {
 
     public LoginWindow() {
         try {
-            socket = new Socket(ADDR, PORT);
-            in = new DataInputStream(socket.getInputStream());
-            out = new DataOutputStream(socket.getOutputStream());
+            socket = SocketChannel.open();
+            socket.connect(new InetSocketAddress(ADDR, PORT));
+            socket.configureBlocking(true);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
     private void openMainWindow(){
+        System.out.println("okey, opening main window");
         try {
+
             FXMLLoader fxmlLoader = new FXMLLoader(this.getClass().getResource("mainWindow.fxml"));
             Scene mainWindowScene = new Scene(fxmlLoader.load(), 600,400);
             MainWindow mainWindow = fxmlLoader.getController();
@@ -90,15 +104,15 @@ public class LoginWindow implements ServerCommands {
     }
 
     private void send(String s) throws IOException{
-        out.writeUTF(s);
-        out.flush();
+        ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
+        socket.write(buffer);
+        buffer.clear();
+
     }
 
     public void onExit(){
         try {
             send(END);
-            in.close();
-            out.close();
             socket.close();
         } catch (IOException e) {
             e.printStackTrace();

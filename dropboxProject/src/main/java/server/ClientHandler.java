@@ -1,62 +1,61 @@
 package server;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.net.Socket;
+import java.io.*;
+import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 
 public class ClientHandler implements ServerCommands {
-    private Server server;
-    private Socket socket;
-    private DataInputStream in;
-    private DataOutputStream out;
+    private Server serverChannel;
+    private SocketChannel socketChannel;
     private User user;
 
-    public ClientHandler(Server server, Socket socket)  {
-        this.server = server;
-        this.socket = socket;
+    public ClientHandler(Server serverChannel, SocketChannel socketChannel)  {
+        this.serverChannel = serverChannel;
+        this.socketChannel = socketChannel;
+    }
+    public void read(){
+        ByteBuffer buffer = ByteBuffer.allocate(256);
         try {
-            in = new DataInputStream(socket.getInputStream());
-            out = new DataOutputStream(socket.getOutputStream());
-            while (true) {
-                String s = in.readUTF();
-                System.out.println("Echo: " + s);
-                if (s.startsWith(AUTH)) {
-                    user = server.authorizeMe(s.split(" ")[1], s.split(" ")[2]);
-                    if (user != null) {
-                        System.out.println("login ok " + user.getId());
-                        sendInfo(AUTHOK + user.getId());
-                    } else sendInfo("Wrong login/password");
-                } else if (s.startsWith(GETFILELIST)){
-                    String[] filesList = getFilesList();
-                    String files = FILELIST + SEP;
-                    for (int i = 0; i < filesList.length; i++) {
-                        files += (filesList[i] + SEP);
-                    }
-                    sendInfo(files);
-                } else if (s.startsWith(END)){
-                    server.unSubscribeMe(this);
-                    break;
-                }
+            socketChannel.read(buffer);
+            buffer.flip();
+            StringBuilder str = new StringBuilder();
+            while (buffer.hasRemaining()){
+                str.append ((char) buffer.get());
             }
-
+            buffer.clear();
+            String s = str.toString();
+            System.out.println("Echo: " + s);
+            if (s.startsWith(AUTH)) {
+                user = serverChannel.authorizeMe(s.split(" ")[1], s.split(" ")[2]);
+                if (user != null) {
+                    System.out.println("login ok " + user.getId());
+                    sendInfo(AUTHOK + " " + user.getId());
+                } else sendInfo("Wrong login/password");
+            } else if (s.startsWith(GETFILELIST)) {
+                String[] filesList = getFilesList();
+                String files = FILELIST + SEP;
+                for (int i = 0; i < filesList.length; i++) {
+                    files += (filesList[i] + SEP);
+                }
+                sendInfo(files);
+            } else if (s.startsWith(END)) {
+                serverChannel.unSubscribeMe(this);
+            }
         } catch (IOException e) {
             e.printStackTrace();
-        } finally {
-            close();
         }
     }
 
     public void sendInfo(String s) throws IOException{
-        out.writeUTF(s);
-        out.flush();
+        ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
+        buffer.rewind();
+        socketChannel.write(buffer);
+        buffer.clear();
     }
+
     private void close(){
         try {
-            in.close();
-            out.close();
-            socket.close();
+            socketChannel.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -65,5 +64,9 @@ public class ClientHandler implements ServerCommands {
     private String[] getFilesList(){
         File mainDirectory = new File(user.getPath());
         return mainDirectory.list();
+    }
+
+    public SocketChannel getSocketChannel() {
+        return socketChannel;
     }
 }

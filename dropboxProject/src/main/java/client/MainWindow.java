@@ -8,15 +8,17 @@ import server.ServerCommands;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.net.Socket;
+
+import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 
 public class MainWindow implements ServerCommands {
     @FXML
     public TextArea textArea;
 
-    private DataOutputStream out;
-    private DataInputStream in;
-    private Socket socket;
+//    private DataOutputStream out;
+//    private DataInputStream in;
+    private SocketChannel socket;
 
     private class TableEntry{
         ImageView icon;
@@ -54,23 +56,24 @@ public class MainWindow implements ServerCommands {
         }
     }
 
-    public void setSocket(Socket socket) {
+    public void setSocket(SocketChannel socket) {
         this.socket = socket;
-        try {
-            in = new DataInputStream(socket.getInputStream());
-            out = new DataOutputStream(socket.getOutputStream());
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
     }
 
     public void start(){
         try {
             refresh();
-            String msg = in.readUTF();
+            ByteBuffer buffer = ByteBuffer.allocate(256);
+            String msg = new String();
+            socket.read(buffer);
+            buffer.rewind();
+            while (buffer.hasRemaining()){
+                msg += (char) buffer.get();
+            }
+            System.out.println(msg);
+            buffer.clear();
             if (msg.startsWith(FILELIST)) {
                 String[] files = msg.split(SEP);
-                System.out.println(msg);
                 for (int i = 1; i < files.length; i++) {
                     textArea.appendText(files[i] + "\n");
                 }
@@ -84,14 +87,13 @@ public class MainWindow implements ServerCommands {
         send(GETFILELIST);
     }
     private void send(String s) throws IOException{
-        out.writeUTF(s);
-        out.flush();
+        ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
+        socket.write(buffer);
+        buffer.clear();
     }
     public void onExit(){
         try {
             send(END);
-            in.close();
-            out.close();
             socket.close();
         } catch (IOException e) {
             e.printStackTrace();
