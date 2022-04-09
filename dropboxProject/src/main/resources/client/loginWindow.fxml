@@ -15,7 +15,7 @@
          <PasswordField fx:id="passwordField" prefHeight="26.0" prefWidth="138.0" styleClass="my-text" AnchorPane.rightAnchor="0.0" />
       </AnchorPane>
 
-      <Button fx:id="btnLogin" alignment="CENTER" mnemonicParsing="false" onAction="#onLogin" prefHeight="26.0" prefWidth="80.0" text="Login" />
+      <Button fx:id="btnLogin" alignment="CENTER" defaultButton="true" mnemonicParsing="false" onAction="#onLogin" prefHeight="26.0" prefWidth="80.0" text="Login" />
       <Label fx:id="label" />
    </children>
    <padding>

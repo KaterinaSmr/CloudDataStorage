@@ -1,11 +1,14 @@
 package server;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 public class User {
     private int id;
     private String login;
     private String password;
     private String timestamp;
-    private String path;
+    private Path path;
 
     public int getId() {
         return id;
@@ -19,7 +22,7 @@ public class User {
     public String getTimestamp() {
         return timestamp;
     }
-    public String getPath() {
+    public Path getPath() {
         return path;
     }
 
@@ -28,7 +31,7 @@ public class User {
         this.login = login;
         this.password = password;
         this.timestamp = timestamp;
-        this.path = path;
+        this.path = Paths.get(path);
     }
 
 

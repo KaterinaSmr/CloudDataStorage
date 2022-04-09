@@ -31,8 +31,6 @@ public class LoginWindow implements ServerCommands {
     private SocketChannel socket;
     private final String ADDR = "localhost";
     private final int PORT = 8189;
-    private DataInputStream in;
-    private DataOutputStream out;
 
     @FXML
     public void onLogin (){
@@ -43,8 +41,7 @@ public class LoginWindow implements ServerCommands {
             ByteBuffer buffer = ByteBuffer.allocate(256);
             socket.read(buffer);
             buffer.rewind();
-            System.out.println("position " + buffer.position() + " limit : " +  buffer.limit());
-            String s = new String();
+            String s = "";
             while (buffer.hasRemaining()){
                 s += (char) buffer.get();
             }
@@ -73,11 +70,10 @@ public class LoginWindow implements ServerCommands {
     private void openMainWindow(){
         System.out.println("okey, opening main window");
         try {
-
             FXMLLoader fxmlLoader = new FXMLLoader(this.getClass().getResource("mainWindow.fxml"));
             Scene mainWindowScene = new Scene(fxmlLoader.load(), 600,400);
             MainWindow mainWindow = fxmlLoader.getController();
-            mainWindow.setSocket(socket);
+            mainWindow.setSocketChannel(socket);
 
             Stage mainStage = new Stage();
             mainStage.setScene(mainWindowScene);
@@ -95,7 +91,6 @@ public class LoginWindow implements ServerCommands {
                     Platform.exit();
                 }
             });
-
             currentStage.close();
             mainWindow.start();
         } catch (IOException e) {
@@ -107,7 +102,6 @@ public class LoginWindow implements ServerCommands {
         ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
         socket.write(buffer);
         buffer.clear();
-
     }
 
     public void onExit(){

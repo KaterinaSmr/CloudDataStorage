@@ -1,103 +1,134 @@
 package client;
 
+import common.FilesTree;
+import common.MyObjectInputStream;
 import javafx.fxml.FXML;
-import javafx.scene.control.TextArea;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableView;
+import javafx.scene.control.TreeItem;
+import javafx.scene.control.TreeView;
+import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import server.ServerCommands;
-
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-
+import java.io.*;
+import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 
 public class MainWindow implements ServerCommands {
     @FXML
-    public TextArea textArea;
+    public TreeView treeView;
+    @FXML
+    public TableView tableView;
+    @FXML
+    private TableColumn columnName;
+    @FXML
+    private TableColumn columnType;
+    @FXML
+    private TableColumn columnSize;
+    @FXML
+    private TableColumn columnTime;
 
-//    private DataOutputStream out;
-//    private DataInputStream in;
-    private SocketChannel socket;
+    private Image image;
+    private TreeItem<FilesTree> rootItem;
+    private SocketChannel socketChannel;
+    private MyObjectInputStream inObjStream;
 
-    private class TableEntry{
-        ImageView icon;
-        String name;
-        String type;
-        String timestamp;
-        int size;
-
-        public ImageView getIcon() {
-            return icon;
-        }
-        public String getName() {
-            return name;
-        }
-        public String getType() {
-            return type;
-        }
-        public String getTimestamp() {
-            return timestamp;
-        }
-        public int getSize() {
-            return size;
-        }
-
-        public void setIcon(ImageView icon) {
-            this.icon = icon;
-        }
-
-        public TableEntry(String name, String type, String timestamp, int size) {
-            this.icon = null;
-            this.name = name;
-            this.type = type;
-            this.timestamp = timestamp;
-            this.size = size;
-        }
-    }
-
-    public void setSocket(SocketChannel socket) {
-        this.socket = socket;
+    public void setSocketChannel(SocketChannel socketChannel) throws IOException {
+        this.socketChannel = socketChannel;
+        inObjStream = new MyObjectInputStream(socketChannel);
     }
 
     public void start(){
+        System.out.println("Method start() is called");
         try {
-            refresh();
-            ByteBuffer buffer = ByteBuffer.allocate(256);
-            String msg = new String();
-            socket.read(buffer);
-            buffer.rewind();
-            while (buffer.hasRemaining()){
-                msg += (char) buffer.get();
+            requestFilesTreeRefresh();
+            String header = readMessageHeader(COMMAND_LENGTH);
+            System.out.println("Header: " + header);
+            if (header.startsWith(FILES_TREE)){
+                int objectSize = Integer.parseInt(header.split(SEP)[1]);
+                System.out.println("Object size " + objectSize);
+                FilesTree filesTree = (FilesTree) inObjStream.readObject(objectSize);
+                filesTree.printNode(0);
+                refreshFilesTreeAndTable(filesTree);
             }
-            System.out.println(msg);
-            buffer.clear();
-            if (msg.startsWith(FILELIST)) {
-                String[] files = msg.split(SEP);
-                for (int i = 1; i < files.length; i++) {
-                    textArea.appendText(files[i] + "\n");
-                }
-            }
-        } catch (IOException e) {
+
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private void refresh() throws IOException{
+    private String readMessageHeader(int bufferSize) throws IOException {
+        ByteBuffer buffer0 = ByteBuffer.allocate(bufferSize);
+        String s = "";
+        socketChannel.read(buffer0);
+        buffer0.rewind();
+        while (buffer0.hasRemaining()){
+            s += (char) buffer0.get();
+        }
+        return s;
+    }
+
+    public void refreshFilesTreeAndTable(FilesTree rootNode) {
+        image = new Image(getClass().getResourceAsStream("folder_icon.png"),20,20,true,false);
+
+        rootItem = buildTreeView(rootNode);
+        treeView.setRoot(rootItem);
+
+        columnName.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("name"));
+        columnType.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("type"));
+        columnSize.setCellValueFactory(new PropertyValueFactory<FilesTree, Long>("size"));
+        columnTime.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("timestamp"));
+        tableView.getSortOrder().add(columnType);
+    }
+
+    public TreeItem<FilesTree> buildTreeView (FilesTree node){
+        if (node.isDirectory()) {
+            TreeItem<FilesTree> item = new TreeItem<>(node, new ImageView(image));
+//            TreeItem<FilesTree> item = new TreeItem<>(node);
+            for (FilesTree f : node.getChildren()) {
+                if (f.isDirectory())
+                    item.getChildren().add(buildTreeView(f));
+            }
+            return item;
+        }
+        return null;
+    }
+
+    @FXML
+    public void selectItem(){
+        TreeItem<FilesTree> item = (TreeItem<FilesTree>) treeView.getSelectionModel().getSelectedItem();
+        if (item != null) {
+            tableView.getItems().clear();
+            FilesTree node = item.getValue();
+            System.out.println(item);
+            for (FilesTree f:node.getChildren()) {
+                tableView.getItems().add(f);
+            }
+            tableView.sort();
+        }
+    }
+    private void requestFilesTreeRefresh() throws IOException{
         send(GETFILELIST);
     }
     private void send(String s) throws IOException{
         ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
-        socket.write(buffer);
+        socketChannel.write(buffer);
         buffer.clear();
     }
     public void onExit(){
         try {
             send(END);
-            socket.close();
+            socketChannel.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
         System.out.println("Main Window is closing");
     }
+
+
 }

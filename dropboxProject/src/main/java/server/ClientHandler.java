@@ -1,5 +1,8 @@
 package server;
 
+import common.FilesTree;
+import common.MyObjectOutputStream;
+
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
@@ -8,10 +11,12 @@ public class ClientHandler implements ServerCommands {
     private Server serverChannel;
     private SocketChannel socketChannel;
     private User user;
+    private MyObjectOutputStream outObjStream;
 
-    public ClientHandler(Server serverChannel, SocketChannel socketChannel)  {
-        this.serverChannel = serverChannel;
-        this.socketChannel = socketChannel;
+    public ClientHandler(Server serverChannel, SocketChannel socketChannel)  throws IOException {
+            this.serverChannel = serverChannel;
+            this.socketChannel = socketChannel;
+            this.outObjStream = new MyObjectOutputStream(socketChannel);
     }
     public void read(){
         ByteBuffer buffer = ByteBuffer.allocate(256);
@@ -32,12 +37,7 @@ public class ClientHandler implements ServerCommands {
                     sendInfo(AUTHOK + " " + user.getId());
                 } else sendInfo("Wrong login/password");
             } else if (s.startsWith(GETFILELIST)) {
-                String[] filesList = getFilesList();
-                String files = FILELIST + SEP;
-                for (int i = 0; i < filesList.length; i++) {
-                    files += (filesList[i] + SEP);
-                }
-                sendInfo(files);
+                sendFilesTree();
             } else if (s.startsWith(END)) {
                 serverChannel.unSubscribeMe(this);
             }
@@ -53,20 +53,23 @@ public class ClientHandler implements ServerCommands {
         buffer.clear();
     }
 
+    private void sendFilesTree() throws IOException{
+        File mainDirectory = user.getPath().toFile();
+        FilesTree rootNode = new FilesTree(mainDirectory);
+        outObjStream.writeObject(rootNode);
+    }
+
+    public SocketChannel getSocketChannel() {
+        return socketChannel;
+    }
+
     private void close(){
         try {
+            outObjStream.close();
             socketChannel.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private String[] getFilesList(){
-        File mainDirectory = new File(user.getPath());
-        return mainDirectory.list();
-    }
-
-    public SocketChannel getSocketChannel() {
-        return socketChannel;
-    }
 }
