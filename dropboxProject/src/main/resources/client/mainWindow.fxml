@@ -23,7 +23,7 @@
                           </placeholder>
                           <columns>
                             <TableColumn fx:id="columnName" prefWidth="160.0" text="Name" />
-                            <TableColumn fx:id="columnType" prefWidth="70.0" text="Type" />
+                            <TableColumn fx:id="columnType" prefWidth="70.0" sortType="DESCENDING" text="Type" />
                             <TableColumn fx:id="columnSize" prefWidth="75.0" text="Size" />
                             <TableColumn fx:id="columnTime" prefWidth="90.0" text="Modified" />
                           </columns>
