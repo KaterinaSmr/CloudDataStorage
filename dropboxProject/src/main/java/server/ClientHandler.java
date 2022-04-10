@@ -2,6 +2,7 @@ package server;
 
 import common.FilesTree;
 import common.MyObjectOutputStream;
+import common.ServerCommands;
 
 import java.io.*;
 import java.nio.ByteBuffer;

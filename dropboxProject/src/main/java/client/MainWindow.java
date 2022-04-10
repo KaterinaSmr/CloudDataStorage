@@ -3,20 +3,14 @@ package client;
 import common.FilesTree;
 import common.MyObjectInputStream;
 import javafx.fxml.FXML;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableView;
-import javafx.scene.control.TreeItem;
-import javafx.scene.control.TreeView;
+import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import server.ServerCommands;
+import common.ServerCommands;
 import java.io.*;
-import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 
 public class MainWindow implements ServerCommands {
@@ -50,7 +44,7 @@ public class MainWindow implements ServerCommands {
             String header = readMessageHeader(COMMAND_LENGTH);
             System.out.println("Header: " + header);
             if (header.startsWith(FILES_TREE)){
-                int objectSize = Integer.parseInt(header.split(SEP)[1]);
+                int objectSize = Integer.parseInt(header.split(SEPARATOR)[1]);
                 System.out.println("Object size " + objectSize);
                 FilesTree filesTree = (FilesTree) inObjStream.readObject(objectSize);
                 filesTree.printNode(0);
@@ -84,6 +78,42 @@ public class MainWindow implements ServerCommands {
         columnSize.setCellValueFactory(new PropertyValueFactory<FilesTree, Long>("size"));
         columnTime.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("timestamp"));
         tableView.getSortOrder().add(columnType);
+
+
+        //тут мы делаем так, чтобы при двойном клике на папке в табличной части автоматически выделялся
+        // соответствующий узел дерева каталогов и мы проваливались в эту папку
+        tableView.setRowFactory( tv -> {
+            TableRow<FilesTree> row = new TableRow<>();
+            row.setOnMouseClicked(event -> {
+                if (event.getClickCount() >= 2) {
+                    FilesTree selectedFilesTreeNode = row.getItem();
+                    System.out.println("Double clicked row " + selectedFilesTreeNode);
+                    TreeItem<FilesTree> selectedTreeItem = getTreeItemByValue(treeView.getRoot(), selectedFilesTreeNode);
+                    if (selectedFilesTreeNode.isDirectory())
+                        setSelectedTreeItem(selectedTreeItem);
+                }
+            });
+            return row ;
+        });
+    }
+
+    private void setSelectedTreeItem (TreeItem<FilesTree> item){
+        treeView.getSelectionModel().select(item);
+        item.setExpanded(true);
+        selectItem();
+    }
+
+    private TreeItem<FilesTree> getTreeItemByValue (TreeItem<FilesTree> item, FilesTree value){
+        TreeItem<FilesTree> result;
+        if (item.getValue() != null && item.getValue().equals(value))
+            return item;
+        else {
+            for (TreeItem<FilesTree> child : item.getChildren()) {
+                result = getTreeItemByValue(child, value);
+                if (result != null) return result;
+            }
+        }
+        return null;
     }
 
     public TreeItem<FilesTree> buildTreeView (FilesTree node){
@@ -105,7 +135,7 @@ public class MainWindow implements ServerCommands {
         if (item != null) {
             tableView.getItems().clear();
             FilesTree node = item.getValue();
-            System.out.println(item);
+            System.out.println("Selected: " + item);
             for (FilesTree f:node.getChildren()) {
                 tableView.getItems().add(f);
             }
