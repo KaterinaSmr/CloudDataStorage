@@ -15,9 +15,9 @@ import java.nio.channels.SocketChannel;
 
 public class MainWindow implements ServerCommands {
     @FXML
-    public TreeView treeView;
+    public TreeView <FilesTree> treeView;
     @FXML
-    public TableView tableView;
+    public TableView <FilesTree> tableView;
     @FXML
     private TableColumn columnName;
     @FXML
@@ -26,19 +26,30 @@ public class MainWindow implements ServerCommands {
     private TableColumn columnSize;
     @FXML
     private TableColumn columnTime;
+    @FXML
+    private Button downloadButton;
+    @FXML
+    private Button uploadButton;
+    @FXML
+    private Button refreshButton;
+    @FXML
+    private Button addFolderButton;
+    @FXML
+    private Button removeButton;
+    @FXML
+    private Button renameButton;
+    @FXML
+    private Button logoutButton;
 
-    private Image image;
+    private Image iconFolder;
     private TreeItem<FilesTree> rootItem;
     private SocketChannel socketChannel;
     private MyObjectInputStream inObjStream;
 
-    public void setSocketChannel(SocketChannel socketChannel) throws IOException {
-        this.socketChannel = socketChannel;
-        inObjStream = new MyObjectInputStream(socketChannel);
-    }
-
-    public void start(){
+    public void main(){
         System.out.println("Method start() is called");
+        setupVisualElements();
+
         try {
             requestFilesTreeRefresh();
             String header = readMessageHeader(COMMAND_LENGTH);
@@ -56,6 +67,11 @@ public class MainWindow implements ServerCommands {
         }
     }
 
+    public void setSocketChannel(SocketChannel socketChannel) throws IOException {
+        this.socketChannel = socketChannel;
+        inObjStream = new MyObjectInputStream(socketChannel);
+    }
+
     private String readMessageHeader(int bufferSize) throws IOException {
         ByteBuffer buffer0 = ByteBuffer.allocate(bufferSize);
         String s = "";
@@ -67,34 +83,11 @@ public class MainWindow implements ServerCommands {
         return s;
     }
 
-    public void refreshFilesTreeAndTable(FilesTree rootNode) {
-        image = new Image(getClass().getResourceAsStream("folder_icon.png"),20,20,true,false);
 
+
+    public void refreshFilesTreeAndTable(FilesTree rootNode) {
         rootItem = buildTreeView(rootNode);
         treeView.setRoot(rootItem);
-
-        columnName.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("name"));
-        columnType.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("type"));
-        columnSize.setCellValueFactory(new PropertyValueFactory<FilesTree, Long>("size"));
-        columnTime.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("timestamp"));
-        tableView.getSortOrder().add(columnType);
-
-
-        //тут мы делаем так, чтобы при двойном клике на папке в табличной части автоматически выделялся
-        // соответствующий узел дерева каталогов и мы проваливались в эту папку
-        tableView.setRowFactory( tv -> {
-            TableRow<FilesTree> row = new TableRow<>();
-            row.setOnMouseClicked(event -> {
-                if (event.getClickCount() >= 2) {
-                    FilesTree selectedFilesTreeNode = row.getItem();
-                    System.out.println("Double clicked row " + selectedFilesTreeNode);
-                    TreeItem<FilesTree> selectedTreeItem = getTreeItemByValue(treeView.getRoot(), selectedFilesTreeNode);
-                    if (selectedFilesTreeNode.isDirectory())
-                        setSelectedTreeItem(selectedTreeItem);
-                }
-            });
-            return row ;
-        });
     }
 
     private void setSelectedTreeItem (TreeItem<FilesTree> item){
@@ -118,7 +111,7 @@ public class MainWindow implements ServerCommands {
 
     public TreeItem<FilesTree> buildTreeView (FilesTree node){
         if (node.isDirectory()) {
-            TreeItem<FilesTree> item = new TreeItem<>(node, new ImageView(image));
+            TreeItem<FilesTree> item = new TreeItem<>(node, new ImageView(iconFolder));
 //            TreeItem<FilesTree> item = new TreeItem<>(node);
             for (FilesTree f : node.getChildren()) {
                 if (f.isDirectory())
@@ -128,7 +121,14 @@ public class MainWindow implements ServerCommands {
         }
         return null;
     }
-
+    private void requestFilesTreeRefresh() throws IOException{
+        send(GETFILELIST);
+    }
+    private void send(String s) throws IOException{
+        ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
+        socketChannel.write(buffer);
+        buffer.clear();
+    }
     @FXML
     public void selectItem(){
         TreeItem<FilesTree> item = (TreeItem<FilesTree>) treeView.getSelectionModel().getSelectedItem();
@@ -142,14 +142,22 @@ public class MainWindow implements ServerCommands {
             tableView.sort();
         }
     }
-    private void requestFilesTreeRefresh() throws IOException{
-        send(GETFILELIST);
-    }
-    private void send(String s) throws IOException{
-        ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
-        socketChannel.write(buffer);
-        buffer.clear();
-    }
+
+    @FXML
+    public void onDownloadButton(){}
+    @FXML
+    public void onUploadButton(){}
+    @FXML
+    public void onRenameButton(){}
+    @FXML
+    public void onRemoveButton(){}
+    @FXML
+    public void onRefreshButton(){}
+    @FXML
+    public void onAddFolderButton(){}
+    @FXML
+    public void onLogoutButton(){}
+
     public void onExit(){
         try {
             send(END);
@@ -158,6 +166,47 @@ public class MainWindow implements ServerCommands {
             e.printStackTrace();
         }
         System.out.println("Main Window is closing");
+    }
+
+    public void setupVisualElements(){
+        //тут мы делаем так, чтобы при двойном клике на папке в табличной части автоматически выделялся
+        // соответствующий узел дерева каталогов и мы проваливались в эту папку
+        Image iconDownload = new Image(getClass().getResourceAsStream("download_icon.png"),48,48,true,false);
+        downloadButton.setGraphic(new ImageView(iconDownload));
+        Image iconUpload = new Image(getClass().getResourceAsStream("upload_icon.png"),48,48,true,false);
+        uploadButton.setGraphic(new ImageView(iconUpload));
+        Image iconAddFolder = new Image(getClass().getResourceAsStream("addFolder_icon.png"),48,48,true,false);
+        addFolderButton.setGraphic(new ImageView(iconAddFolder));
+        Image iconLogout = new Image(getClass().getResourceAsStream("logout_icon.png"),48,48,true,false);
+        logoutButton.setGraphic(new ImageView(iconLogout));
+        Image iconRefresh = new Image(getClass().getResourceAsStream("refresh_icon.png"),48,48,true,false);
+        refreshButton.setGraphic(new ImageView(iconRefresh));
+        Image iconRemove = new Image(getClass().getResourceAsStream("remove_icon.png"),48,48,true,false);
+        removeButton.setGraphic(new ImageView(iconRemove));
+        Image iconRename = new Image(getClass().getResourceAsStream("rename_icon.png"),48,48,true,false);
+        renameButton.setGraphic(new ImageView(iconRename));
+
+        iconFolder = new Image(getClass().getResourceAsStream("folder_icon.png"),20,20,true,false);
+
+        columnName.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("name"));
+        columnType.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("type"));
+        columnSize.setCellValueFactory(new PropertyValueFactory<FilesTree, Long>("size"));
+        columnTime.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("timestamp"));
+        tableView.getSortOrder().add(columnType);
+
+        tableView.setRowFactory( tv -> {
+            TableRow<FilesTree> row = new TableRow<>();
+            row.setOnMouseClicked(event -> {
+                if (event.getClickCount() >= 2) {
+                    FilesTree selectedFilesTreeNode = row.getItem();
+                    System.out.println("Double clicked row " + selectedFilesTreeNode);
+                    TreeItem<FilesTree> selectedTreeItem = getTreeItemByValue(treeView.getRoot(), selectedFilesTreeNode);
+                    if (selectedFilesTreeNode.isDirectory())
+                        setSelectedTreeItem(selectedTreeItem);
+                }
+            });
+            return row ;
+        });
     }
 
 

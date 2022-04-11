@@ -9,7 +9,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.stage.Stage;
-import common.ServerCommands;
+import common.*;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -69,13 +69,15 @@ public class LoginWindow implements ServerCommands {
         System.out.println("okey, opening main window");
         try {
             FXMLLoader fxmlLoader = new FXMLLoader(this.getClass().getResource("mainWindow.fxml"));
-            Scene mainWindowScene = new Scene(fxmlLoader.load(), 600,400);
+            Scene mainWindowScene = new Scene(fxmlLoader.load(), 600,500);
             MainWindow mainWindow = fxmlLoader.getController();
             mainWindow.setSocketChannel(socket);
 
             Stage mainStage = new Stage();
             mainStage.setScene(mainWindowScene);
             mainStage.setTitle("Welcome!");
+            mainStage.setMinHeight(200.0);
+            mainStage.setMinWidth(600.0);
             mainStage.show();
             Stage currentStage = (Stage)btnLogin.getScene().getWindow();
 
@@ -90,7 +92,7 @@ public class LoginWindow implements ServerCommands {
                 }
             });
             currentStage.close();
-            mainWindow.start();
+            mainWindow.main();
         } catch (IOException e) {
             e.printStackTrace();
         }

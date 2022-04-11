@@ -1,11 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import javafx.geometry.*?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<VBox prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/11.0.2" xmlns:fx="http://javafx.com/fxml/1" fx:controller="client.MainWindow">
+<VBox minHeight="200.0" minWidth="600.0" prefHeight="500.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/11.0.2" xmlns:fx="http://javafx.com/fxml/1" fx:controller="client.MainWindow">
    <children>
-      <HBox prefHeight="30.0" prefWidth="600.0" />
+      <HBox minHeight="100.0" prefHeight="100.0" prefWidth="600.0" spacing="5.0">
+         <children>
+            <Button fx:id="downloadButton" contentDisplay="TOP" mnemonicParsing="false" onAction="#onDownloadButton" prefHeight="100.0" prefWidth="100.0" text="Download" />
+            <Button fx:id="uploadButton" contentDisplay="TOP" mnemonicParsing="false" onAction="#onUploadButton" prefHeight="100.0" prefWidth="100.0" text="Upload" />
+            <Button fx:id="renameButton" contentDisplay="TOP" mnemonicParsing="false" onAction="#onRenameButton" prefHeight="100.0" prefWidth="100.0" text="Rename" />
+            <Button fx:id="addFolderButton" contentDisplay="TOP" mnemonicParsing="false" onAction="#onAddFolderButton" prefHeight="100.0" prefWidth="100.0" text="Add folder" wrapText="true" />
+            <Button fx:id="removeButton" contentDisplay="TOP" mnemonicParsing="false" onAction="#onRemoveButton" prefHeight="100.0" prefWidth="100.0" text="Remove" />
+            <Button fx:id="refreshButton" contentDisplay="TOP" mnemonicParsing="false" onAction="#onRefreshButton" prefHeight="100.0" prefWidth="100.0" text="Refresh" />
+            <Button fx:id="logoutButton" contentDisplay="TOP" mnemonicParsing="false" onAction="#onLogoutButton" prefHeight="100.0" prefWidth="100.0" text="Logout" />
+         </children>
+         <padding>
+            <Insets bottom="5.0" left="5.0" right="5.0" top="5.0" />
+         </padding></HBox>
       <AnchorPane prefHeight="600.0" prefWidth="600.0" VBox.vgrow="ALWAYS">
          <children>
             <SplitPane dividerPositions="0.33" prefHeight="200.0" prefWidth="200.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
