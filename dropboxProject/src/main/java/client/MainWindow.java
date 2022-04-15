@@ -4,7 +4,6 @@ import common.FilesTree;
 import common.MyObjectInputStream;
 import common.ServerCommands;
 import javafx.application.Platform;
-import javafx.event.Event;
 import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
@@ -12,6 +11,9 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.KeyCode;
+import javafx.scene.robot.Robot;
+
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
@@ -24,13 +26,13 @@ public class MainWindow implements ServerCommands {
     @FXML
     public TableView <FilesTree> tableView;
     @FXML
-    private TableColumn columnName;
+    private TableColumn<FilesTree, String> columnName;
     @FXML
-    private TableColumn columnType;
+    private TableColumn<FilesTree, String> columnType;
     @FXML
-    private TableColumn columnSize;
+    private TableColumn<FilesTree, Long> columnSize;
     @FXML
-    private TableColumn columnTime;
+    private TableColumn<FilesTree, String> columnTime;
     @FXML
     private Button downloadButton;
     @FXML
@@ -50,7 +52,6 @@ public class MainWindow implements ServerCommands {
     private SocketChannel socketChannel;
     private MyObjectInputStream inObjStream;
     private FilesTree filesTree = null;
-    private TreeItem<FilesTree> rootItem;
     private Exchanger<String> statusExchanger;
 
     public void main(){
@@ -83,7 +84,7 @@ public class MainWindow implements ServerCommands {
                     } else if (header.startsWith(RENAMSTATUS)){
                         String msg = readMessage();
                         try {
-                            String resp = statusExchanger.exchange(msg);
+                            statusExchanger.exchange(msg);
                         } catch (InterruptedException e) {
                             e.printStackTrace();
                         }
@@ -94,7 +95,6 @@ public class MainWindow implements ServerCommands {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-
         }).start();
     }
 
@@ -129,7 +129,7 @@ public class MainWindow implements ServerCommands {
     public void refreshFilesTreeAndTable(FilesTree rootNode) {
         tableView.getItems().clear();
         System.out.println("refresh");
-        rootItem = buildTreeView(rootNode);
+        TreeItem<FilesTree> rootItem = buildTreeView(rootNode);
         treeView.setRoot(rootItem);
     }
 
@@ -200,16 +200,9 @@ public class MainWindow implements ServerCommands {
     public void onUploadButton(){}
     @FXML
     public void onRenameButton(){
-    // fire TableColumn.CellEditEvent>
-//        если выделена строка - получить позицию и текущее значение
-        TablePosition pos = tableView.getSelectionModel().getSelectedCells().get(0);
-        TablePosition posNew = new TablePosition(tableView, pos.getRow(), columnName);
-        System.out.println("selected row: " + pos.getRow() + " - " + posNew.getRow());
-        System.out.println("selected column: " + pos.getColumn() + " - " + posNew.getColumn());
-        TableColumn.CellEditEvent<FilesTree, String> event = new TableColumn.CellEditEvent<FilesTree, String>(
-                tableView, posNew, TableColumn.editAnyEvent(), tableView.getItems().get(pos.getRow()).getName());
-        Event.fireEvent(tableView, event);
-
+        tableView.requestFocus();
+        Robot robot = new Robot();
+        robot.keyPress(KeyCode.ENTER);
     }
     @FXML
     public void onRemoveButton(){}
@@ -232,8 +225,6 @@ public class MainWindow implements ServerCommands {
         System.out.println("Main Window is closing");
     }
 
-
-
     public void setupVisualElements(){
         iconFolder = new Image(getClass().getResourceAsStream("folder_icon.png"),20,20,true,false);
         Image iconDownload = new Image(getClass().getResourceAsStream("download_icon.png"),48,48,true,false);
@@ -253,47 +244,38 @@ public class MainWindow implements ServerCommands {
 
         //тут мы делаем так, чтобы при двойном клике на папке в табличной части автоматически выделялся
         // соответствующий узел дерева каталогов и мы проваливались в эту папку
-        columnName.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("name"));
-        columnType.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("type"));
-        columnSize.setCellValueFactory(new PropertyValueFactory<FilesTree, Long>("size"));
-        columnTime.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("timestamp"));
+        columnName.setCellValueFactory(new PropertyValueFactory<>("name"));
+        columnType.setCellValueFactory(new PropertyValueFactory<>("type"));
+        columnSize.setCellValueFactory(new PropertyValueFactory<>("size"));
+        columnTime.setCellValueFactory(new PropertyValueFactory<>("timestamp"));
         tableView.getSortOrder().add(columnType);
         columnName.setCellFactory(TextFieldTableCell.<FilesTree>forTableColumn());
 
-        columnName.setOnEditStart(new EventHandler<TableColumn.CellEditEvent>() {
-            @Override
-            public void handle(TableColumn.CellEditEvent cellEditEvent) {
-                System.out.println("Edit start");
-            }
-        });
         columnName.setOnEditCommit(
-                new EventHandler<TableColumn.CellEditEvent>() {
-                    @Override
-                    public void handle(TableColumn.CellEditEvent t) {
-                        FilesTree changedNode = ((FilesTree) t.getTableView().getItems().get(t.getTablePosition().getRow()));
-                        System.out.println("changed node " + changedNode);
-                        String s = (String) t.getNewValue();
-                        if (s.equals(changedNode.getName())) {
-                            System.out.println("Name is the same");
-                            return;
+                (EventHandler<TableColumn.CellEditEvent<FilesTree, String>>) t -> {
+                    FilesTree changedNode = ((FilesTree) t.getTableView().getItems().get(t.getTablePosition().getRow()));
+                    System.out.println("changed node " + changedNode);
+                    String s = (String) t.getNewValue();
+                    if (s.equals(changedNode.getName())) {
+                        System.out.println("Name is the same");
+                        return;
+                    }
+                    requestRename(changedNode.getFile().getAbsolutePath(), s);
+                    String resp = "";
+                    try {
+                        resp = statusExchanger.exchange("ok");
+                        System.out.println("thread Main got msg: " + resp);
+                        if (resp.startsWith(OK)) {
+                            System.out.println(resp);
+                            String[] newPath = resp.split(SEPARATOR);
+                            File newFile = new File(newPath[1]);
+                            changedNode.setFile(newFile);
+                            treeView.refresh();
+                        } else {
+                            System.out.println(resp);
                         }
-                        requestRename(changedNode.getFile().getAbsolutePath(), s);
-                        String resp = "";
-                        try {
-                            resp = statusExchanger.exchange("ok");
-                            System.out.println("thread Main got msg: " + resp);
-                            if (resp.startsWith(OK)) {
-                                System.out.println(resp);
-                                String[] newPath = resp.split(SEPARATOR);
-                                File newFile = new File(newPath[1]);
-                                changedNode.setFile(newFile);
-                                treeView.refresh();
-                            } else {
-                                System.out.println(resp);
-                            }
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
                     }
                 }
         );
