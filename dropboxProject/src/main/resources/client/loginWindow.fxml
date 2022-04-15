@@ -8,7 +8,7 @@
    <children>
       <AnchorPane>
          <Label text="Login" AnchorPane.bottomAnchor="5.0" AnchorPane.leftAnchor="0.0" />
-         <TextField fx:id="loginField" prefHeight="26.0" prefWidth="138.0" styleClass="my-text" AnchorPane.rightAnchor="0.0" />
+         <TextField fx:id="loginField" prefHeight="26.0" prefWidth="138.0" styleClass="my-text" text="login1" AnchorPane.rightAnchor="0.0" />
       </AnchorPane>
       <AnchorPane>
          <Label text="Password" AnchorPane.bottomAnchor="5.0" AnchorPane.leftAnchor="0.0" />

@@ -77,6 +77,7 @@ public class Server {
     }
     public void unSubscribeMe(ClientHandler c){
         clients.remove(c);
+        c.close();
     }
     private void connectToDB() throws Exception {
         Class.forName("org.sqlite.JDBC");

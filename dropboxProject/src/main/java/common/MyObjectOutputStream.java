@@ -5,26 +5,25 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.util.Arrays;
 
 public class MyObjectOutputStream implements ServerCommands{
     private SocketChannel socketChannel;
-    private ObjectOutputStream outStream;
-    private ByteArrayOutputStream bAOutputStream;
 
     public MyObjectOutputStream(SocketChannel socketChannel) throws IOException{
         this.socketChannel = socketChannel;
-        this.bAOutputStream = new ByteArrayOutputStream(256);
-        this.outStream = new ObjectOutputStream(bAOutputStream);
     }
 
     public void writeObject(Object ob) throws IOException {
+        ByteArrayOutputStream bAOutputStream = new ByteArrayOutputStream();
+        ObjectOutputStream outStream = new ObjectOutputStream(bAOutputStream);
         outStream.writeObject(ob);
         byte[] arr = bAOutputStream.toByteArray();
-//        System.out.println(Arrays.toString(arr));
-//        System.out.println("Количество байт " + arr.length);
+        System.out.println(Arrays.toString(arr));
+        System.out.println("Количество байт " + arr.length);
 
-        int maxLeading0s = COMMAND_LENGTH - FILES_TREE.length() - 1;
-        ByteBuffer buffer0 = ByteBuffer.wrap((FILES_TREE + " "
+        int maxLeading0s = COMMAND_LENGTH - FILES_TREE.length() - SEPARATOR.length();
+        ByteBuffer buffer0 = ByteBuffer.wrap((FILES_TREE + SEPARATOR
                 + String.format("%0" + maxLeading0s + "d", arr.length)).getBytes());
         //формирование сообщения вида "/ftree 00081"
 
@@ -35,9 +34,7 @@ public class MyObjectOutputStream implements ServerCommands{
         ByteBuffer buffer = ByteBuffer.wrap(arr);
         buffer.rewind();
         socketChannel.write(buffer);
-    }
-
-    public void close() throws IOException{
         outStream.close();
     }
+
 }

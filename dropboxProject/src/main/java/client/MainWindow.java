@@ -2,15 +2,20 @@ package client;
 
 import common.FilesTree;
 import common.MyObjectInputStream;
+import common.ServerCommands;
+import javafx.application.Platform;
+import javafx.event.Event;
+import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import common.ServerCommands;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.util.concurrent.Exchanger;
 
 
 public class MainWindow implements ServerCommands {
@@ -42,29 +47,67 @@ public class MainWindow implements ServerCommands {
     private Button logoutButton;
 
     private Image iconFolder;
-    private TreeItem<FilesTree> rootItem;
     private SocketChannel socketChannel;
     private MyObjectInputStream inObjStream;
+    private FilesTree filesTree = null;
+    private TreeItem<FilesTree> rootItem;
+    private Exchanger<String> statusExchanger;
 
     public void main(){
         System.out.println("Method start() is called");
+        statusExchanger = new Exchanger<>();
         setupVisualElements();
 
         try {
             requestFilesTreeRefresh();
-            String header = readMessageHeader(COMMAND_LENGTH);
-            System.out.println("Header: " + header);
-            if (header.startsWith(FILES_TREE)){
-                int objectSize = Integer.parseInt(header.split(SEPARATOR)[1]);
-                System.out.println("Object size " + objectSize);
-                FilesTree filesTree = (FilesTree) inObjStream.readObject(objectSize);
-                filesTree.printNode(0);
-                refreshFilesTreeAndTable(filesTree);
-            }
-
         } catch (Exception e) {
             e.printStackTrace();
         }
+
+       new Thread(()->{
+            try {
+                while (true) {
+                    String header = readMessageHeader(COMMAND_LENGTH);
+                    System.out.println("Header: " + header);
+                    if (header.startsWith(FILES_TREE)){
+                        int objectSize = Integer.parseInt(header.split(SEPARATOR)[1]);
+                        System.out.println("Object size " + objectSize);
+                        try {
+                            filesTree = (FilesTree) inObjStream.readObject(objectSize);
+                        } catch (ClassNotFoundException e) {
+                            e.printStackTrace();
+                        }
+                        Platform.runLater(()->{
+                            refreshFilesTreeAndTable(filesTree);
+                        });
+                    } else if (header.startsWith(RENAMSTATUS)){
+                        String msg = readMessage();
+                        try {
+                            String resp = statusExchanger.exchange(msg);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    } else if (header.startsWith(INFO)){
+                        //отобразить сообщение во всплывающем окошке
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+        }).start();
+    }
+
+    private String readMessage() throws IOException{
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        socketChannel.read(buffer);
+        buffer.flip();
+        String s = "";
+        System.out.println("Buffer limit: " + buffer.limit());
+        while (buffer.hasRemaining()){
+            s += (char) buffer.get();
+        }
+        return s;
     }
 
     public void setSocketChannel(SocketChannel socketChannel) throws IOException {
@@ -73,19 +116,19 @@ public class MainWindow implements ServerCommands {
     }
 
     private String readMessageHeader(int bufferSize) throws IOException {
-        ByteBuffer buffer0 = ByteBuffer.allocate(bufferSize);
+        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
         String s = "";
-        socketChannel.read(buffer0);
-        buffer0.rewind();
-        while (buffer0.hasRemaining()){
-            s += (char) buffer0.get();
+        socketChannel.read(buffer);
+        buffer.flip();
+        while (buffer.hasRemaining()){
+            s += (char) buffer.get();
         }
         return s;
     }
 
-
-
     public void refreshFilesTreeAndTable(FilesTree rootNode) {
+        tableView.getItems().clear();
+        System.out.println("refresh");
         rootItem = buildTreeView(rootNode);
         treeView.setRoot(rootItem);
     }
@@ -96,12 +139,12 @@ public class MainWindow implements ServerCommands {
         selectItem();
     }
 
-    private TreeItem<FilesTree> getTreeItemByValue (TreeItem<FilesTree> item, FilesTree value){
+    private TreeItem<FilesTree> getTreeItemByValue (TreeItem<FilesTree> treeRoot, FilesTree value){
         TreeItem<FilesTree> result;
-        if (item.getValue() != null && item.getValue().equals(value))
-            return item;
+        if (treeRoot.getValue() != null && treeRoot.getValue().equals(value))
+            return treeRoot;
         else {
-            for (TreeItem<FilesTree> child : item.getChildren()) {
+            for (TreeItem<FilesTree> child : treeRoot.getChildren()) {
                 result = getTreeItemByValue(child, value);
                 if (result != null) return result;
             }
@@ -112,7 +155,6 @@ public class MainWindow implements ServerCommands {
     public TreeItem<FilesTree> buildTreeView (FilesTree node){
         if (node.isDirectory()) {
             TreeItem<FilesTree> item = new TreeItem<>(node, new ImageView(iconFolder));
-//            TreeItem<FilesTree> item = new TreeItem<>(node);
             for (FilesTree f : node.getChildren()) {
                 if (f.isDirectory())
                     item.getChildren().add(buildTreeView(f));
@@ -121,12 +163,22 @@ public class MainWindow implements ServerCommands {
         }
         return null;
     }
-    private void requestFilesTreeRefresh() throws IOException{
+    private void requestFilesTreeRefresh(){
         send(GETFILELIST);
     }
-    private void send(String s) throws IOException{
-        ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
-        socketChannel.write(buffer);
+    private void requestRename(String path, String newName){
+        String str = RENAME + SEPARATOR + path + SEPARATOR + newName;
+        send(str);
+    }
+
+    private void send(String s) {
+        ByteBuffer buffer = null;
+        try {
+            buffer = ByteBuffer.wrap(s.getBytes());
+            socketChannel.write(buffer);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         buffer.clear();
     }
     @FXML
@@ -135,7 +187,6 @@ public class MainWindow implements ServerCommands {
         if (item != null) {
             tableView.getItems().clear();
             FilesTree node = item.getValue();
-            System.out.println("Selected: " + item);
             for (FilesTree f:node.getChildren()) {
                 tableView.getItems().add(f);
             }
@@ -148,11 +199,24 @@ public class MainWindow implements ServerCommands {
     @FXML
     public void onUploadButton(){}
     @FXML
-    public void onRenameButton(){}
+    public void onRenameButton(){
+    // fire TableColumn.CellEditEvent>
+//        если выделена строка - получить позицию и текущее значение
+        TablePosition pos = tableView.getSelectionModel().getSelectedCells().get(0);
+        TablePosition posNew = new TablePosition(tableView, pos.getRow(), columnName);
+        System.out.println("selected row: " + pos.getRow() + " - " + posNew.getRow());
+        System.out.println("selected column: " + pos.getColumn() + " - " + posNew.getColumn());
+        TableColumn.CellEditEvent<FilesTree, String> event = new TableColumn.CellEditEvent<FilesTree, String>(
+                tableView, posNew, TableColumn.editAnyEvent(), tableView.getItems().get(pos.getRow()).getName());
+        Event.fireEvent(tableView, event);
+
+    }
     @FXML
     public void onRemoveButton(){}
     @FXML
-    public void onRefreshButton(){}
+    public void onRefreshButton(){
+        requestFilesTreeRefresh();
+    }
     @FXML
     public void onAddFolderButton(){}
     @FXML
@@ -168,9 +232,10 @@ public class MainWindow implements ServerCommands {
         System.out.println("Main Window is closing");
     }
 
+
+
     public void setupVisualElements(){
-        //тут мы делаем так, чтобы при двойном клике на папке в табличной части автоматически выделялся
-        // соответствующий узел дерева каталогов и мы проваливались в эту папку
+        iconFolder = new Image(getClass().getResourceAsStream("folder_icon.png"),20,20,true,false);
         Image iconDownload = new Image(getClass().getResourceAsStream("download_icon.png"),48,48,true,false);
         downloadButton.setGraphic(new ImageView(iconDownload));
         Image iconUpload = new Image(getClass().getResourceAsStream("upload_icon.png"),48,48,true,false);
@@ -186,13 +251,52 @@ public class MainWindow implements ServerCommands {
         Image iconRename = new Image(getClass().getResourceAsStream("rename_icon.png"),48,48,true,false);
         renameButton.setGraphic(new ImageView(iconRename));
 
-        iconFolder = new Image(getClass().getResourceAsStream("folder_icon.png"),20,20,true,false);
-
+        //тут мы делаем так, чтобы при двойном клике на папке в табличной части автоматически выделялся
+        // соответствующий узел дерева каталогов и мы проваливались в эту папку
         columnName.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("name"));
         columnType.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("type"));
         columnSize.setCellValueFactory(new PropertyValueFactory<FilesTree, Long>("size"));
         columnTime.setCellValueFactory(new PropertyValueFactory<FilesTree, String>("timestamp"));
         tableView.getSortOrder().add(columnType);
+        columnName.setCellFactory(TextFieldTableCell.<FilesTree>forTableColumn());
+
+        columnName.setOnEditStart(new EventHandler<TableColumn.CellEditEvent>() {
+            @Override
+            public void handle(TableColumn.CellEditEvent cellEditEvent) {
+                System.out.println("Edit start");
+            }
+        });
+        columnName.setOnEditCommit(
+                new EventHandler<TableColumn.CellEditEvent>() {
+                    @Override
+                    public void handle(TableColumn.CellEditEvent t) {
+                        FilesTree changedNode = ((FilesTree) t.getTableView().getItems().get(t.getTablePosition().getRow()));
+                        System.out.println("changed node " + changedNode);
+                        String s = (String) t.getNewValue();
+                        if (s.equals(changedNode.getName())) {
+                            System.out.println("Name is the same");
+                            return;
+                        }
+                        requestRename(changedNode.getFile().getAbsolutePath(), s);
+                        String resp = "";
+                        try {
+                            resp = statusExchanger.exchange("ok");
+                            System.out.println("thread Main got msg: " + resp);
+                            if (resp.startsWith(OK)) {
+                                System.out.println(resp);
+                                String[] newPath = resp.split(SEPARATOR);
+                                File newFile = new File(newPath[1]);
+                                changedNode.setFile(newFile);
+                                treeView.refresh();
+                            } else {
+                                System.out.println(resp);
+                            }
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+        );
 
         tableView.setRowFactory( tv -> {
             TableRow<FilesTree> row = new TableRow<>();
@@ -208,6 +312,4 @@ public class MainWindow implements ServerCommands {
             return row ;
         });
     }
-
-
 }

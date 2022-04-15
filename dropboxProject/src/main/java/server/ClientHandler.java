@@ -13,6 +13,7 @@ public class ClientHandler implements ServerCommands {
     private SocketChannel socketChannel;
     private User user;
     private MyObjectOutputStream outObjStream;
+    private File mainDirectory;
 
     public ClientHandler(Server serverChannel, SocketChannel socketChannel)  throws IOException {
             this.serverChannel = serverChannel;
@@ -24,21 +25,25 @@ public class ClientHandler implements ServerCommands {
         try {
             socketChannel.read(buffer);
             buffer.flip();
-            StringBuilder str = new StringBuilder();
-            while (buffer.hasRemaining()){
-                str.append ((char) buffer.get());
+            StringBuilder sb = new StringBuilder();
+            while (buffer.hasRemaining()) {
+                sb.append((char) buffer.get());
             }
             buffer.clear();
-            String s = str.toString();
+            String s = sb.toString();
             System.out.println("Echo: " + s);
             if (s.startsWith(AUTH)) {
-                user = serverChannel.authorizeMe(s.split(" ")[1], s.split(" ")[2]);
+                user = serverChannel.authorizeMe(s.split(SEPARATOR)[1], s.split(SEPARATOR)[2]);
                 if (user != null) {
                     System.out.println("login ok " + user.getId());
-                    sendInfo(AUTHOK + " " + user.getId());
+                    sendInfo(AUTHOK + SEPARATOR + user.getId());
+                    mainDirectory = mainDirectory = user.getPath().toFile();
                 } else sendInfo("Wrong login/password");
             } else if (s.startsWith(GETFILELIST)) {
                 sendFilesTree();
+            } else if (s.startsWith(RENAME)){
+                String[] strings = s.split(SEPARATOR);
+                rename(strings[1], strings[2]);
             } else if (s.startsWith(END)) {
                 serverChannel.unSubscribeMe(this);
             }
@@ -47,26 +52,48 @@ public class ClientHandler implements ServerCommands {
         }
     }
 
-    public void sendInfo(String s) throws IOException{
+    public void sendInfo(String s) {
         ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
         buffer.rewind();
-        socketChannel.write(buffer);
+        try {
+            socketChannel.write(buffer);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         buffer.clear();
     }
 
     private void sendFilesTree() throws IOException{
-        File mainDirectory = user.getPath().toFile();
         FilesTree rootNode = new FilesTree(mainDirectory);
         outObjStream.writeObject(rootNode);
+    }
+
+    private void rename(String path, String newName){
+        FilesTree rootNode = new FilesTree(mainDirectory);
+        FilesTree node2Change = rootNode.validateFile(path);
+        if (node2Change != null) {
+            File file2rename = node2Change.getFile();
+            String newPath = path.substring(0, path.length() - file2rename.getName().length()) + newName;
+            if (rootNode.validateFile(newPath) != null) {
+                sendInfo(RENAMSTATUS + "File " + newName + " already exist");
+                return;
+            }
+            File newFile = new File(newPath);
+            if (file2rename.renameTo(newFile)) {
+                node2Change.setFile(newFile);
+                sendInfo(RENAMSTATUS + OK + SEPARATOR + newFile.getAbsolutePath());
+                return;
+            }
+        }
+        sendInfo(RENAMSTATUS + "Renaming failed. Please try again later");
     }
 
     public SocketChannel getSocketChannel() {
         return socketChannel;
     }
 
-    private void close(){
+    public void close(){
         try {
-            outObjStream.close();
             socketChannel.close();
         } catch (IOException e) {
             e.printStackTrace();

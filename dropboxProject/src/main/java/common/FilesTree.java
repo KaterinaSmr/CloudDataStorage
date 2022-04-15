@@ -54,15 +54,31 @@ public class FilesTree implements Serializable {
     public String getName(){
         return file.getName();
     }
-    public void printNode(int level){
-        System.out.println(level + " | " + this.getName());
-        if (this.hasChildren()){
-            for (FilesTree f: this.children) {
-                int l = level+1;
-                f.printNode(l);
-            }
+
+    public FilesTree validateFile(String path){
+        FilesTree result = null;
+        if (this.getFile().getAbsolutePath().equals(path))
+            return this;
+        for (FilesTree f: this.getChildren()) {
+            result = (f.validateFile(path));
+            if (result != null) return result;
         }
+        return result;
     }
+
+    public void setFile(File file) {
+        this.file = file;
+    }
+
+    //    public void printNode(int level){
+//        System.out.println(level + " | " + this.getName());
+//        if (this.hasChildren()){
+//            for (FilesTree f: this.children) {
+//                int l = level+1;
+//                f.printNode(l);
+//            }
+//        }
+//    }
 
     @Override
     public String toString() {

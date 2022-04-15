@@ -34,11 +34,11 @@ public class LoginWindow implements ServerCommands {
     public void onLogin (){
         System.out.println("login pressed");
         try {
-            send(AUTH + " " + loginField.getText() + " " + passwordField.getText());
+            send(AUTH + SEPARATOR + loginField.getText() + SEPARATOR + passwordField.getText());
 
             ByteBuffer buffer = ByteBuffer.allocate(256);
             socket.read(buffer);
-            buffer.rewind();
+            buffer.flip();
             String s = "";
             while (buffer.hasRemaining()){
                 s += (char) buffer.get();
