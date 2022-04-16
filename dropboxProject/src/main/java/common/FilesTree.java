@@ -9,13 +9,13 @@ import java.util.Date;
 import java.util.TimeZone;
 
 public class FilesTree implements Serializable {
-    ArrayList<FilesTree> children;
-    File file;
+    private ArrayList<FilesTree> children;
+    private File file;
 
-    String name;
-    String type;
-    Long size;
-    String timestamp;
+    private String name;
+    private String type;
+    private Long size;
+    private String timestamp;
 
     static DateFormat formatter = new SimpleDateFormat("dd.MM.yy HH:mm");
     static {
@@ -42,9 +42,7 @@ public class FilesTree implements Serializable {
     public boolean isDirectory(){
         return file.isDirectory();
     }
-    public boolean hasChildren (){
-        return !children.isEmpty();
-    }
+
     public void addChild(FilesTree child){
         children.add(child);
     }
@@ -69,16 +67,6 @@ public class FilesTree implements Serializable {
     public void setFile(File file) {
         this.file = file;
     }
-
-    //    public void printNode(int level){
-//        System.out.println(level + " | " + this.getName());
-//        if (this.hasChildren()){
-//            for (FilesTree f: this.children) {
-//                int l = level+1;
-//                f.printNode(l);
-//            }
-//        }
-//    }
 
     @Override
     public String toString() {

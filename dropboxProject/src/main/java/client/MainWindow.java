@@ -13,6 +13,8 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
 import javafx.scene.robot.Robot;
+import javafx.stage.Popup;
+import javafx.stage.PopupWindow;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -53,6 +55,7 @@ public class MainWindow implements ServerCommands {
     private MyObjectInputStream inObjStream;
     private FilesTree filesTree = null;
     private Exchanger<String> statusExchanger;
+    private MessageWindow messageWindow;
 
     public void main(){
         System.out.println("Method start() is called");
@@ -199,13 +202,18 @@ public class MainWindow implements ServerCommands {
     @FXML
     public void onUploadButton(){}
     @FXML
-    public void onRenameButton(){
+    public void onRenameButton() {
+        if (tableView.getSelectionModel().getSelectedCells().isEmpty()) {
+            return;
+        }
         tableView.requestFocus();
         Robot robot = new Robot();
         robot.keyPress(KeyCode.ENTER);
     }
     @FXML
-    public void onRemoveButton(){}
+    public void onRemoveButton(){
+        messageWindow.show("hello", "Hello, world", MessageWindow.MessageType.CONFIRMATION);
+    }
     @FXML
     public void onRefreshButton(){
         requestFilesTreeRefresh();
@@ -226,6 +234,7 @@ public class MainWindow implements ServerCommands {
     }
 
     public void setupVisualElements(){
+        messageWindow = new MessageWindow();
         iconFolder = new Image(getClass().getResourceAsStream("folder_icon.png"),20,20,true,false);
         Image iconDownload = new Image(getClass().getResourceAsStream("download_icon.png"),48,48,true,false);
         downloadButton.setGraphic(new ImageView(iconDownload));
