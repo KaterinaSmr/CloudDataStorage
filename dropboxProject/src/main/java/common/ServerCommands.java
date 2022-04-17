@@ -5,6 +5,8 @@ public interface ServerCommands {
     String GETFILELIST = "/reqfilelist";
     String RENAME = "/reqrename";
     String RENAMSTATUS = "/renamstatus";
+    String REMOVE = "/reqtoremove";
+    String REMSTATUS = "/removalstat";
     String OK = "OK";
     String AUTHOK ="/authorizaok";
     String INFO = "/infomessage";

@@ -12,15 +12,17 @@ import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.robot.Robot;
-import javafx.stage.Popup;
-import javafx.stage.PopupWindow;
 
-import java.io.*;
+import javax.swing.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.File;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.Exchanger;
-
 
 public class MainWindow implements ServerCommands {
     @FXML
@@ -84,7 +86,7 @@ public class MainWindow implements ServerCommands {
                         Platform.runLater(()->{
                             refreshFilesTreeAndTable(filesTree);
                         });
-                    } else if (header.startsWith(RENAMSTATUS)){
+                    } else if (header.startsWith(RENAMSTATUS) || header.startsWith(REMSTATUS)){
                         String msg = readMessage();
                         try {
                             statusExchanger.exchange(msg);
@@ -106,7 +108,6 @@ public class MainWindow implements ServerCommands {
         socketChannel.read(buffer);
         buffer.flip();
         String s = "";
-        System.out.println("Buffer limit: " + buffer.limit());
         while (buffer.hasRemaining()){
             s += (char) buffer.get();
         }
@@ -173,6 +174,9 @@ public class MainWindow implements ServerCommands {
         String str = RENAME + SEPARATOR + path + SEPARATOR + newName;
         send(str);
     }
+    private void requestRemove(String path){
+        send(REMOVE + SEPARATOR + path);
+    }
 
     private void send(String s) {
         ByteBuffer buffer = null;
@@ -204,6 +208,7 @@ public class MainWindow implements ServerCommands {
     @FXML
     public void onRenameButton() {
         if (tableView.getSelectionModel().getSelectedCells().isEmpty()) {
+            messageWindow.show("Warning", "No files selected", MessageWindow.Type.INFORMATION);
             return;
         }
         tableView.requestFocus();
@@ -212,7 +217,46 @@ public class MainWindow implements ServerCommands {
     }
     @FXML
     public void onRemoveButton(){
-        messageWindow.show("hello", "Hello, world", MessageWindow.MessageType.CONFIRMATION);
+        FilesTree nodeToRemove;
+        try {
+            if (tableView.getSelectionModel().getSelectedCells().isEmpty()) {
+                messageWindow.show("Warning", "No files selected", MessageWindow.Type.INFORMATION);
+                return;
+            } else {
+                TablePosition pos = tableView.getSelectionModel().getSelectedCells().get(0);
+                nodeToRemove = tableView.getItems().get(pos.getRow());
+                if (nodeToRemove.equals(filesTree)) {
+                    messageWindow.show("Removal failed","Cannot remove root folder", MessageWindow.Type.INFORMATION);
+                    return;
+                }
+                messageWindow.show("Please confirm", "Are you sure to remove '" + nodeToRemove.getName() + "'?", MessageWindow.Type.CONFIRMATION);
+            }
+            boolean toRemove = messageWindow.getResult();
+            if (!toRemove) return;
+            requestRemove(nodeToRemove.getFile().getAbsolutePath());
+            String resp = "";
+            resp = statusExchanger.exchange("ok");
+            if (resp.startsWith(OK)) {
+                // удалить файл из FilesTree
+                String parent = nodeToRemove.getFile().getParent();
+                filesTree.removeChild(nodeToRemove);
+                //удалить из дерева
+                TreeItem itemToRemove = getTreeItemByValue(treeView.getRoot(), nodeToRemove);
+                if (itemToRemove != null) {
+                    System.out.println(itemToRemove);
+                    itemToRemove.getParent().getChildren().remove(itemToRemove);
+                    treeView.refresh();
+                }
+                //удалить из таблицы
+                tableView.getItems().removeAll();
+                selectItem();
+            } else {
+                System.out.println(resp);
+                messageWindow.show("Removal failed", resp, MessageWindow.Type.INFORMATION);
+            }
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
     @FXML
     public void onRefreshButton(){
@@ -251,8 +295,7 @@ public class MainWindow implements ServerCommands {
         Image iconRename = new Image(getClass().getResourceAsStream("rename_icon.png"),48,48,true,false);
         renameButton.setGraphic(new ImageView(iconRename));
 
-        //тут мы делаем так, чтобы при двойном клике на папке в табличной части автоматически выделялся
-        // соответствующий узел дерева каталогов и мы проваливались в эту папку
+
         columnName.setCellValueFactory(new PropertyValueFactory<>("name"));
         columnType.setCellValueFactory(new PropertyValueFactory<>("type"));
         columnSize.setCellValueFactory(new PropertyValueFactory<>("size"));
@@ -263,10 +306,15 @@ public class MainWindow implements ServerCommands {
         columnName.setOnEditCommit(
                 (EventHandler<TableColumn.CellEditEvent<FilesTree, String>>) t -> {
                     FilesTree changedNode = ((FilesTree) t.getTableView().getItems().get(t.getTablePosition().getRow()));
-                    System.out.println("changed node " + changedNode);
+                    if (changedNode.equals(filesTree)){
+                        messageWindow.show("Rename failed", "Cannot rename root folder", MessageWindow.Type.INFORMATION);
+                        return;
+                    }
+
                     String s = (String) t.getNewValue();
                     if (s.equals(changedNode.getName())) {
                         System.out.println("Name is the same");
+                        messageWindow.show("Rename failed", "New name is the same", MessageWindow.Type.INFORMATION);
                         return;
                     }
                     requestRename(changedNode.getFile().getAbsolutePath(), s);
@@ -282,6 +330,7 @@ public class MainWindow implements ServerCommands {
                             treeView.refresh();
                         } else {
                             System.out.println(resp);
+                            messageWindow.show("Rename failed", resp, MessageWindow.Type.INFORMATION);
                         }
                     } catch (InterruptedException e) {
                         e.printStackTrace();
@@ -289,6 +338,8 @@ public class MainWindow implements ServerCommands {
                 }
         );
 
+        //тут мы делаем так, чтобы при двойном клике на папке в табличной части автоматически выделялся
+        // соответствующий узел дерева каталогов и мы проваливались в эту папку
         tableView.setRowFactory( tv -> {
             TableRow<FilesTree> row = new TableRow<>();
             row.setOnMouseClicked(event -> {
@@ -302,5 +353,11 @@ public class MainWindow implements ServerCommands {
             });
             return row ;
         });
+    }
+
+    @FXML
+    public void keyboardHandler(KeyEvent ke){
+        if (ke.getCode().equals(KeyCode.DELETE))
+            onRemoveButton();
     }
 }

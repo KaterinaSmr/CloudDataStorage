@@ -44,6 +44,9 @@ public class ClientHandler implements ServerCommands {
             } else if (s.startsWith(RENAME)){
                 String[] strings = s.split(SEPARATOR);
                 rename(strings[1], strings[2]);
+            } else if (s.startsWith(REMOVE)){
+                String[] strings = s.split(SEPARATOR);
+                remove(strings[1]);
             } else if (s.startsWith(END)) {
                 serverChannel.unSubscribeMe(this);
             }
@@ -86,6 +89,37 @@ public class ClientHandler implements ServerCommands {
             }
         }
         sendInfo(RENAMSTATUS + "Renaming failed. Please try again later");
+    }
+
+    private void remove(String path){
+        FilesTree rootNode = new FilesTree(mainDirectory);
+        FilesTree node2Remove = rootNode.validateFile(path);
+        if (node2Remove != null){
+            File file2Remove = node2Remove.getFile();
+
+            boolean remFile = removeDir(file2Remove);
+
+            boolean remTree = rootNode.removeChild(node2Remove);
+            System.out.println("Rem file " + remFile);
+            System.out.println("Rem tree " + remTree);
+            if (remFile && remTree) {
+                sendInfo(REMSTATUS + OK);
+                return;
+            } else
+                sendInfo(REMSTATUS + "Remove failed. Please try again later");
+        } else {
+            sendInfo(REMSTATUS  + "File not found on server");
+        }
+    }
+
+    private boolean removeDir(File file){
+        File[] contents = file.listFiles();
+        if (contents != null) {
+            for (File f : contents) {
+                removeDir(f);
+            }
+        }
+        return file.delete();
     }
 
     public SocketChannel getSocketChannel() {

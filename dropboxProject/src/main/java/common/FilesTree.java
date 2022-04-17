@@ -46,6 +46,13 @@ public class FilesTree implements Serializable {
     public void addChild(FilesTree child){
         children.add(child);
     }
+    public boolean removeChild(FilesTree child) {
+        if (children.remove(child)) return true;
+        for (FilesTree f: this.getChildren()) {
+            if (f.removeChild(child)) return true;
+        }
+        return false;
+    }
     public File getFile(){
         return file;
     }

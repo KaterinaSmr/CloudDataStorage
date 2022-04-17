@@ -1,13 +1,16 @@
 package client;
 
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.scene.text.TextAlignment;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+
 
 public class MessageWindow {
     private Stage window;
@@ -16,7 +19,7 @@ public class MessageWindow {
     private Button buttonCancel;
     private VBox layout;
     private HBox buttonPane;
-    public enum MessageType {INFORMATION, CONFIRMATION};
+    public enum Type {INFORMATION, CONFIRMATION};
     private boolean result;
 
     public MessageWindow(){
@@ -26,9 +29,12 @@ public class MessageWindow {
         this.buttonCancel = new Button("Cancel");
         buttonOk.setPrefWidth(80);
         buttonCancel.setPrefWidth(80);
+        label.setWrapText(true);
+        label.setTextAlignment(TextAlignment.CENTER);
+        label.setPrefWidth(200);
 
         window.initModality(Modality.APPLICATION_MODAL);
-        window.setHeight(180);
+        window.setHeight(200);
         window.setWidth(250);
         window.setResizable(false);
         layout = new VBox(25);
@@ -50,16 +56,16 @@ public class MessageWindow {
             window.hide();
         });
     }
-    public void show (String title, String message, MessageType type){
+    public void show (String title, String message, Type type){
+        result = false;
         window.setTitle(title);
         label.setText(message);
         buttonPane.getChildren().clear();
         buttonPane.getChildren().add(buttonOk);
-        if (type.equals(MessageType.CONFIRMATION)){
+        if (type.equals(Type.CONFIRMATION)){
             buttonPane.getChildren().add(buttonCancel);
-
         }
-        window.show();
+        window.showAndWait();
     }
 
     public boolean getResult(){
