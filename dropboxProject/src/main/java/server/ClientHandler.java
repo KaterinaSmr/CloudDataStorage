@@ -14,6 +14,7 @@ public class ClientHandler implements ServerCommands {
     private User user;
     private MyObjectOutputStream outObjStream;
     private File mainDirectory;
+    private FilesTree rootNode;
 
     public ClientHandler(Server serverChannel, SocketChannel socketChannel)  throws IOException {
             this.serverChannel = serverChannel;
@@ -47,6 +48,9 @@ public class ClientHandler implements ServerCommands {
             } else if (s.startsWith(REMOVE)){
                 String[] strings = s.split(SEPARATOR);
                 remove(strings[1]);
+            } else if(s.startsWith(NEWFOLDER)){
+                String[] strings = s.split(SEPARATOR);
+                createFolder(strings[1], strings[2]);
             } else if (s.startsWith(END)) {
                 serverChannel.unSubscribeMe(this);
             }
@@ -67,12 +71,29 @@ public class ClientHandler implements ServerCommands {
     }
 
     private void sendFilesTree() throws IOException{
-        FilesTree rootNode = new FilesTree(mainDirectory);
+        rootNode = new FilesTree(mainDirectory);
         outObjStream.writeObject(rootNode);
     }
 
+    private void createFolder(String parent, String name){
+        rootNode = new FilesTree(mainDirectory);
+        FilesTree parentTree = rootNode.validateFile(parent);
+        if (parentTree != null) {
+            File newFolder = new File(parentTree.getFile().getAbsolutePath() + "/" + name);
+            if (rootNode.validateFile(newFolder.getAbsolutePath()) == null) {
+                if (newFolder.mkdir()) {
+                    sendInfo(NEWFOLDSTATUS + OK + SEPARATOR + newFolder.getAbsolutePath());
+                }
+            } else {
+                sendInfo(NEWFOLDSTATUS + "File with name " + name + " already exist in directory " + parentTree.getName());
+            }
+        } else {
+            sendInfo(NEWFOLDSTATUS + "Operation failed. Please try again later");
+        }
+    }
+
     private void rename(String path, String newName){
-        FilesTree rootNode = new FilesTree(mainDirectory);
+        rootNode = new FilesTree(mainDirectory);
         FilesTree node2Change = rootNode.validateFile(path);
         if (node2Change != null) {
             File file2rename = node2Change.getFile();
@@ -92,16 +113,12 @@ public class ClientHandler implements ServerCommands {
     }
 
     private void remove(String path){
-        FilesTree rootNode = new FilesTree(mainDirectory);
+        rootNode = new FilesTree(mainDirectory);
         FilesTree node2Remove = rootNode.validateFile(path);
         if (node2Remove != null){
             File file2Remove = node2Remove.getFile();
-
             boolean remFile = removeDir(file2Remove);
-
             boolean remTree = rootNode.removeChild(node2Remove);
-            System.out.println("Rem file " + remFile);
-            System.out.println("Rem tree " + remTree);
             if (remFile && remTree) {
                 sendInfo(REMSTATUS + OK);
                 return;

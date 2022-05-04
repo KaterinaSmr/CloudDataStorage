@@ -15,14 +15,12 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.robot.Robot;
 
-import javax.swing.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.Exchanger;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainWindow implements ServerCommands {
     @FXML
@@ -58,6 +56,7 @@ public class MainWindow implements ServerCommands {
     private FilesTree filesTree = null;
     private Exchanger<String> statusExchanger;
     private MessageWindow messageWindow;
+    private AtomicInteger newFolderLock;
 
     public void main(){
         System.out.println("Method start() is called");
@@ -86,7 +85,7 @@ public class MainWindow implements ServerCommands {
                         Platform.runLater(()->{
                             refreshFilesTreeAndTable(filesTree);
                         });
-                    } else if (header.startsWith(RENAMSTATUS) || header.startsWith(REMSTATUS)){
+                    } else if (header.startsWith(RENAMSTATUS) || header.startsWith(REMSTATUS) || header.startsWith(NEWFOLDSTATUS)){
                         String msg = readMessage();
                         try {
                             statusExchanger.exchange(msg);
@@ -94,7 +93,8 @@ public class MainWindow implements ServerCommands {
                             e.printStackTrace();
                         }
                     } else if (header.startsWith(INFO)){
-                        //отобразить сообщение во всплывающем окошке
+                        String msg = readMessage();
+                        messageWindow.show("Info", msg, MessageWindow.Type.INFORMATION);
                     }
                 }
             } catch (IOException e) {
@@ -178,6 +178,21 @@ public class MainWindow implements ServerCommands {
         send(REMOVE + SEPARATOR + path);
     }
 
+    private void removeItem(FilesTree nodeToRemove){
+        // удалить файл из FilesTree
+        String parent = nodeToRemove.getFile().getParent();
+        filesTree.removeChild(nodeToRemove);
+        //удалить из дерева
+        TreeItem itemToRemove = getTreeItemByValue(treeView.getRoot(), nodeToRemove);
+        if (itemToRemove != null) {
+            itemToRemove.getParent().getChildren().remove(itemToRemove);
+            treeView.refresh();
+        }
+        //удалить из таблицы
+        tableView.getItems().removeAll();
+        selectItem();
+    }
+
     private void send(String s) {
         ByteBuffer buffer = null;
         try {
@@ -237,19 +252,7 @@ public class MainWindow implements ServerCommands {
             String resp = "";
             resp = statusExchanger.exchange("ok");
             if (resp.startsWith(OK)) {
-                // удалить файл из FilesTree
-                String parent = nodeToRemove.getFile().getParent();
-                filesTree.removeChild(nodeToRemove);
-                //удалить из дерева
-                TreeItem itemToRemove = getTreeItemByValue(treeView.getRoot(), nodeToRemove);
-                if (itemToRemove != null) {
-                    System.out.println(itemToRemove);
-                    itemToRemove.getParent().getChildren().remove(itemToRemove);
-                    treeView.refresh();
-                }
-                //удалить из таблицы
-                tableView.getItems().removeAll();
-                selectItem();
+                removeItem(nodeToRemove);
             } else {
                 System.out.println(resp);
                 messageWindow.show("Removal failed", resp, MessageWindow.Type.INFORMATION);
@@ -263,9 +266,49 @@ public class MainWindow implements ServerCommands {
         requestFilesTreeRefresh();
     }
     @FXML
-    public void onAddFolderButton(){}
+    public void onAddFolderButton(){
+        InputWindow inputWindow = new InputWindow();
+        inputWindow.show("New Folder","Please enter folder name", "New Folder");
+        String name = inputWindow.getResult();
+        System.out.println("New folder name: " + name);
+        if (name == null) return;
+
+        TreeItem<FilesTree> item = (TreeItem<FilesTree>) treeView.getSelectionModel().getSelectedItem();
+        FilesTree parent = item.getValue();
+        send(NEWFOLDER + SEPARATOR + parent.getFile().getAbsolutePath()
+                + SEPARATOR + name);
+
+        String resp = "";
+        try {
+            resp = statusExchanger.exchange("ok");
+            System.out.println("thread Main got msg: " + resp);
+            if (resp.startsWith(OK)) {
+                String[] newPath = resp.split(SEPARATOR);
+                File newFile = new File(newPath[1]);
+                FilesTree newNode = new FilesTree(newFile, true);
+                parent.addChild(newNode);
+                TreeItem<FilesTree> newTreeItem = new TreeItem<>(newNode, new ImageView(iconFolder));
+                treeView.getSelectionModel().getSelectedItem().getChildren().add(newTreeItem);
+                treeView.refresh();
+                setSelectedTreeItem(newTreeItem.getParent());
+            } else {
+                System.out.println(resp);
+                messageWindow.show("Creation failed", resp, MessageWindow.Type.INFORMATION);
+            }
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+    }
     @FXML
-    public void onLogoutButton(){}
+    public void onLogoutButton(){
+
+    }
+    @FXML
+    public void keyboardHandler(KeyEvent ke){
+        if (ke.getCode().equals(KeyCode.DELETE))
+            onRemoveButton();
+    }
 
     public void onExit(){
         try {
@@ -278,6 +321,7 @@ public class MainWindow implements ServerCommands {
     }
 
     public void setupVisualElements(){
+        newFolderLock = new AtomicInteger(0);
         messageWindow = new MessageWindow();
         iconFolder = new Image(getClass().getResourceAsStream("folder_icon.png"),20,20,true,false);
         Image iconDownload = new Image(getClass().getResourceAsStream("download_icon.png"),48,48,true,false);
@@ -305,13 +349,14 @@ public class MainWindow implements ServerCommands {
 
         columnName.setOnEditCommit(
                 (EventHandler<TableColumn.CellEditEvent<FilesTree, String>>) t -> {
+                    System.out.println("On edit commit called");
                     FilesTree changedNode = ((FilesTree) t.getTableView().getItems().get(t.getTablePosition().getRow()));
+                    String s = t.getNewValue();
+
                     if (changedNode.equals(filesTree)){
                         messageWindow.show("Rename failed", "Cannot rename root folder", MessageWindow.Type.INFORMATION);
                         return;
                     }
-
-                    String s = (String) t.getNewValue();
                     if (s.equals(changedNode.getName())) {
                         System.out.println("Name is the same");
                         messageWindow.show("Rename failed", "New name is the same", MessageWindow.Type.INFORMATION);
@@ -323,7 +368,6 @@ public class MainWindow implements ServerCommands {
                         resp = statusExchanger.exchange("ok");
                         System.out.println("thread Main got msg: " + resp);
                         if (resp.startsWith(OK)) {
-                            System.out.println(resp);
                             String[] newPath = resp.split(SEPARATOR);
                             File newFile = new File(newPath[1]);
                             changedNode.setFile(newFile);
@@ -331,6 +375,9 @@ public class MainWindow implements ServerCommands {
                         } else {
                             System.out.println(resp);
                             messageWindow.show("Rename failed", resp, MessageWindow.Type.INFORMATION);
+                            tableView.requestFocus();
+                            Robot robot = new Robot();
+                            robot.keyPress(KeyCode.ENTER);
                         }
                     } catch (InterruptedException e) {
                         e.printStackTrace();
@@ -345,7 +392,6 @@ public class MainWindow implements ServerCommands {
             row.setOnMouseClicked(event -> {
                 if (event.getClickCount() >= 2) {
                     FilesTree selectedFilesTreeNode = row.getItem();
-                    System.out.println("Double clicked row " + selectedFilesTreeNode);
                     TreeItem<FilesTree> selectedTreeItem = getTreeItemByValue(treeView.getRoot(), selectedFilesTreeNode);
                     if (selectedFilesTreeNode.isDirectory())
                         setSelectedTreeItem(selectedTreeItem);
@@ -355,9 +401,4 @@ public class MainWindow implements ServerCommands {
         });
     }
 
-    @FXML
-    public void keyboardHandler(KeyEvent ke){
-        if (ke.getCode().equals(KeyCode.DELETE))
-            onRemoveButton();
-    }
 }

@@ -39,6 +39,23 @@ public class FilesTree implements Serializable {
             }
         }
     }
+    public FilesTree(File f, boolean isDir) {
+        this.file = f;
+        this.children = new ArrayList<>();
+        this.name = f.getName();
+        this.type = (isDir? "Folder" : "File");
+        this.size = f.length();
+
+        Date date = new Date(f.lastModified());
+        this.timestamp = formatter.format(date);
+
+        if (this.isDirectory()) {
+            File[] files = f.listFiles();
+            for (File fl : files) {
+                this.addChild(new FilesTree(fl));
+            }
+        }
+    }
     public boolean isDirectory(){
         return file.isDirectory();
     }

@@ -14,14 +14,9 @@ public class Main extends Application {
     @Override
     public void start(Stage stage) throws Exception {
         FXMLLoader fxmlLoader = new FXMLLoader(getClass().getResource("loginWindow.fxml"));
-//        Parent root = fxmlLoader.load();
-//        stage.setScene(new Scene(root));
-//        stage.show();
-        Scene loginWindowScene = new Scene(fxmlLoader.load(), 300, 300);
+        Scene loginWindowScene = new Scene(fxmlLoader.load(), 300, 260);
         LoginWindow loginWindow = fxmlLoader.getController();
-//        Controller controller = fxmlLoader.getController();
-//        controller.setStage(stage);
-//
+
         stage.setResizable(false);
         stage.setTitle("Hello!");
         stage.setScene(loginWindowScene);

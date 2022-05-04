@@ -7,6 +7,8 @@ public interface ServerCommands {
     String RENAMSTATUS = "/renamstatus";
     String REMOVE = "/reqtoremove";
     String REMSTATUS = "/removalstat";
+    String NEWFOLDER = "/reqnewfoldr";
+    String NEWFOLDSTATUS = "/newfoldstat";
     String OK = "OK";
     String AUTHOK ="/authorizaok";
     String INFO = "/infomessage";

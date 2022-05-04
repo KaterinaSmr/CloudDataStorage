@@ -19,6 +19,6 @@
       <Label fx:id="label" />
    </children>
    <padding>
-      <Insets left="50.0" right="50.0" />
+      <Insets left="50.0" right="50.0" top="40.0" />
    </padding>
 </VBox>
