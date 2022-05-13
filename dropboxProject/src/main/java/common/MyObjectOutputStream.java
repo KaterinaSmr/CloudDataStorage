@@ -19,13 +19,13 @@ public class MyObjectOutputStream implements ServerCommands{
         ObjectOutputStream outStream = new ObjectOutputStream(bAOutputStream);
         outStream.writeObject(ob);
         byte[] arr = bAOutputStream.toByteArray();
-        System.out.println(Arrays.toString(arr));
-        System.out.println("Количество байт " + arr.length);
+//        System.out.println(Arrays.toString(arr));
+//        System.out.println("Количество байт " + arr.length);
 
         int maxLeading0s = COMMAND_LENGTH - FILES_TREE.length() - SEPARATOR.length();
         ByteBuffer buffer0 = ByteBuffer.wrap((FILES_TREE + SEPARATOR
                 + String.format("%0" + maxLeading0s + "d", arr.length)).getBytes());
-        //формирование сообщения вида "/ftree 00081"
+        //формирование сообщения вида "/tree//0081"
 
         buffer0.rewind();
         socketChannel.write(buffer0);

@@ -6,6 +6,7 @@ import common.ServerCommands;
 
 import java.io.*;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 
 public class ClientHandler implements ServerCommands {
@@ -51,6 +52,12 @@ public class ClientHandler implements ServerCommands {
             } else if(s.startsWith(NEWFOLDER)){
                 String[] strings = s.split(SEPARATOR);
                 createFolder(strings[1], strings[2]);
+            } else if(s.startsWith(DOWNLOAD)){
+                String[] strings = s.split(SEPARATOR);
+                int filesQty = countFiles(strings[1]);
+                System.out.println("qty of files to send: " + filesQty);
+                sendInfo(DOWNLCOUNT + filesQty + SEPARATOR);
+                sendFiles(strings[1]);
             } else if (s.startsWith(END)) {
                 serverChannel.unSubscribeMe(this);
             }
@@ -90,6 +97,51 @@ public class ClientHandler implements ServerCommands {
         } else {
             sendInfo(NEWFOLDSTATUS + "Operation failed. Please try again later");
         }
+    }
+
+    private void sendFiles(String path){
+        rootNode = new FilesTree(mainDirectory);
+        FilesTree node2Send = rootNode.validateFile(path);
+        if (node2Send == null) {
+            sendInfo(DOWNLSTATUS + NOK + "File " + path + " not found");
+            return;
+        }
+        if (node2Send.isDirectory()){
+            for (FilesTree f:node2Send.getChildren()){
+                sendFiles(f.getFile().getAbsolutePath());
+            }
+        } else {
+            sendSingeFile(node2Send.getFile());
+        }
+    }
+
+    private void sendSingeFile(File file) {
+        try {
+            FileInputStream fis = new FileInputStream(file);
+            FileChannel fc = fis.getChannel();
+            ByteBuffer bufferOut = ByteBuffer.allocate((int) file.length());
+            sendInfo(DOWNLSTATUS + SEPARATOR + OK + file.length() + SEPARATOR + file.getAbsolutePath() + SEPARATOR);
+            while (fc.read(bufferOut) > 0 || bufferOut.position() > 0) {
+                bufferOut.flip();
+                socketChannel.write(bufferOut);
+                bufferOut.compact();
+            }
+            return;
+        } catch (IOException e) {
+            sendInfo(DOWNLSTATUS + SEPARATOR + NOK + "Unknown error. File " + file.getName() + " cannot be downloaded. Please try again later.");
+        }
+    }
+
+    private int countFiles(String path){
+        rootNode = new FilesTree(mainDirectory);
+        FilesTree node = rootNode.validateFile(path);
+        if (node == null) return 0;
+        if (!node.isDirectory()) return 1;
+        int count = 0;
+        for (FilesTree f:node.getChildren()) {
+            count += countFiles(f.getFile().getAbsolutePath());
+        }
+        return count;
     }
 
     private void rename(String path, String newName){

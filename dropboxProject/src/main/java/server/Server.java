@@ -40,6 +40,7 @@ public class Server {
                 Iterator <SelectionKey> iterator = channels.iterator();
                 while (iterator.hasNext()){
                     SelectionKey key = iterator.next();
+//                    key.attach()
                     if (key.isAcceptable()){
                         clientChannel = serverChannel.accept();
                         if (clientChannel != null) {
@@ -47,7 +48,6 @@ public class Server {
                             clientChannel.configureBlocking(false);
                             clientChannel.register(selector, SelectionKey.OP_READ);
                             clients.add(new ClientHandler(this, clientChannel));
-                            System.out.println("iterator has next? " + iterator.hasNext());
                         }
                     } else if (key.isReadable()){
                         SocketChannel temp = (SocketChannel) key.channel();

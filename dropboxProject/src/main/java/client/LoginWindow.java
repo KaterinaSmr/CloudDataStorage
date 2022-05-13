@@ -26,24 +26,21 @@ public class LoginWindow implements ServerCommands {
     Button btnLogin;
     @FXML
     Label label;
-    private SocketChannel socket;
+    private SocketChannel socketChannel;
     private final String ADDR = "localhost";
     private final int PORT = 8189;
 
     @FXML
     public void onLogin (){
-        System.out.println("login pressed");
         try {
             send(AUTH + SEPARATOR + loginField.getText() + SEPARATOR + passwordField.getText());
-
             ByteBuffer buffer = ByteBuffer.allocate(256);
-            socket.read(buffer);
+            socketChannel.read(buffer);
             buffer.flip();
             String s = "";
             while (buffer.hasRemaining()){
                 s += (char) buffer.get();
             }
-
             System.out.println("ответ:  " + s);
             if (s.startsWith(AUTHOK)){
                 openMainWindow();
@@ -57,21 +54,20 @@ public class LoginWindow implements ServerCommands {
 
     public LoginWindow() {
         try {
-            socket = SocketChannel.open();
-            socket.connect(new InetSocketAddress(ADDR, PORT));
-            socket.configureBlocking(true);
+            socketChannel = SocketChannel.open();
+            socketChannel.connect(new InetSocketAddress(ADDR, PORT));
+            socketChannel.configureBlocking(true);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
     private void openMainWindow(){
-        System.out.println("okey, opening main window");
         try {
             FXMLLoader fxmlLoader = new FXMLLoader(this.getClass().getResource("mainWindow.fxml"));
             Scene mainWindowScene = new Scene(fxmlLoader.load(), 600,500);
             MainWindow mainWindow = fxmlLoader.getController();
-            mainWindow.setSocketChannel(socket);
+            mainWindow.setSocketChannel(socketChannel);
 
             Stage mainStage = new Stage();
             mainStage.setScene(mainWindowScene);
@@ -100,14 +96,14 @@ public class LoginWindow implements ServerCommands {
 
     private void send(String s) throws IOException{
         ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
-        socket.write(buffer);
+        socketChannel.write(buffer);
         buffer.clear();
     }
 
     public void onExit(){
         try {
             send(END);
-            socket.close();
+            socketChannel.close();
         } catch (IOException e) {
             e.printStackTrace();
         }

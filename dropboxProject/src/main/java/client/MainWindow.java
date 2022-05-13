@@ -16,10 +16,12 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.robot.Robot;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
-import java.util.concurrent.Exchanger;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainWindow implements ServerCommands {
@@ -57,9 +59,13 @@ public class MainWindow implements ServerCommands {
     private Exchanger<String> statusExchanger;
     private MessageWindow messageWindow;
     private AtomicInteger newFolderLock;
+    private String downloadPath = "D:/Downloads/";
+    private String nodeParentPath;
+    private CountDownLatch waitingAllFiles;
+    private int countFiles;
+    private final int DEFAULT_BUFFER = 1024;
 
     public void main(){
-        System.out.println("Method start() is called");
         statusExchanger = new Exchanger<>();
         setupVisualElements();
 
@@ -72,7 +78,7 @@ public class MainWindow implements ServerCommands {
        new Thread(()->{
             try {
                 while (true) {
-                    String header = readMessageHeader(COMMAND_LENGTH);
+                    String header = readHeader(COMMAND_LENGTH);
                     System.out.println("Header: " + header);
                     if (header.startsWith(FILES_TREE)){
                         int objectSize = Integer.parseInt(header.split(SEPARATOR)[1]);
@@ -85,16 +91,40 @@ public class MainWindow implements ServerCommands {
                         Platform.runLater(()->{
                             refreshFilesTreeAndTable(filesTree);
                         });
-                    } else if (header.startsWith(RENAMSTATUS) || header.startsWith(REMSTATUS) || header.startsWith(NEWFOLDSTATUS)){
+                    } else if (header.startsWith(RENAMSTATUS) || header.startsWith(REMSTATUS) || header.startsWith(NEWFOLDSTATUS)) {
                         String msg = readMessage();
                         try {
                             statusExchanger.exchange(msg);
                         } catch (InterruptedException e) {
                             e.printStackTrace();
                         }
+                    } else if (header.startsWith(DOWNLCOUNT)) {
+                        try {
+                            statusExchanger.exchange(readMessageInfo());
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    } else if (header.startsWith(DOWNLSTATUS)) {
+                        String status = header.split(SEPARATOR)[1];
+                        if (status.startsWith(OK)) {
+                            String str = readMessageInfo();
+                            int fileLength = Integer.parseInt(str);
+                            String serverPath = readMessageInfo();
+                            String path = downloadPath + serverPath.substring(nodeParentPath.length() + 1);
+                            readFile(fileLength, path);
+                        } else {
+                            String msg = readMessage();
+                            System.out.println(msg);
+                            Platform.runLater(() -> {
+                                messageWindow.show("Error", msg, MessageWindow.Type.INFORMATION);
+                            });
+                        }
                     } else if (header.startsWith(INFO)){
                         String msg = readMessage();
-                        messageWindow.show("Info", msg, MessageWindow.Type.INFORMATION);
+                        System.out.println(msg);
+                        Platform.runLater(()->{
+                            messageWindow.show("Info", msg, MessageWindow.Type.INFORMATION);
+                        });
                     }
                 }
             } catch (IOException e) {
@@ -104,7 +134,7 @@ public class MainWindow implements ServerCommands {
     }
 
     private String readMessage() throws IOException{
-        ByteBuffer buffer = ByteBuffer.allocate(128);
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
         socketChannel.read(buffer);
         buffer.flip();
         String s = "";
@@ -114,12 +144,7 @@ public class MainWindow implements ServerCommands {
         return s;
     }
 
-    public void setSocketChannel(SocketChannel socketChannel) throws IOException {
-        this.socketChannel = socketChannel;
-        inObjStream = new MyObjectInputStream(socketChannel);
-    }
-
-    private String readMessageHeader(int bufferSize) throws IOException {
+    private String readHeader(int bufferSize) throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
         String s = "";
         socketChannel.read(buffer);
@@ -128,6 +153,61 @@ public class MainWindow implements ServerCommands {
             s += (char) buffer.get();
         }
         return s;
+    }
+
+    private String readMessageInfo(){
+        String str = "";
+        try {
+            while (!str.endsWith(SEPARATOR)){
+                str += readHeader(1);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return str.substring(0,str.length()-SEPARATOR.length());
+    }
+
+    private void readFile(int fileLength, String path){
+        System.out.println("File path: " + path + " | File length " + fileLength);
+        int bufferSize = fileLength > DEFAULT_BUFFER ? DEFAULT_BUFFER : fileLength;
+        try {
+            File file = new File(path);
+            File parentDir = file.getParentFile();
+            parentDir.mkdirs();
+            FileOutputStream out = new FileOutputStream(path);
+            FileChannel fileChannel = out.getChannel();
+            ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+            int n = 0;
+            int read = 0;
+            while ((read = socketChannel.read(buffer)) > 0 ) {
+                buffer.flip();
+                fileChannel.write(buffer);
+                n = n + read;
+                buffer.clear();
+                if ((fileLength - n) < bufferSize) break;
+            }
+            int remainingBytes = fileLength - n;
+            if (remainingBytes > 0) {
+                ByteBuffer buffer1 = ByteBuffer.allocate(remainingBytes);
+                read = socketChannel.read(buffer1);
+                fileChannel.write(buffer1);
+                n += read;
+                buffer.clear();
+                System.out.println("Length " + n);
+            }
+            System.out.println("File with " + fileLength + " bytes downloaded");
+            countFiles++;
+        } catch (IOException e){
+            e.printStackTrace();
+            messageWindow.show("Error", "Error reading file " + filesTree.getName(), MessageWindow.Type.INFORMATION);
+        } finally {
+            waitingAllFiles.countDown();
+        }
+    }
+
+    public void setSocketChannel(SocketChannel socketChannel) throws IOException {
+        this.socketChannel = socketChannel;
+        inObjStream = new MyObjectInputStream(socketChannel);
     }
 
     public void refreshFilesTreeAndTable(FilesTree rootNode) {
@@ -217,7 +297,39 @@ public class MainWindow implements ServerCommands {
     }
 
     @FXML
-    public void onDownloadButton(){}
+    public void onDownloadButton(){
+        countFiles = 0;
+        if (tableView.getSelectionModel().getSelectedCells().isEmpty()) {
+            messageWindow.show("Warning", "No files selected", MessageWindow.Type.INFORMATION);
+            return;
+        }
+        TablePosition pos = tableView.getSelectionModel().getSelectedCells().get(0);
+        FilesTree nodeToDownload = tableView.getItems().get(pos.getRow());
+        nodeParentPath = nodeToDownload.getFile().getParent();
+        send(DOWNLOAD + SEPARATOR + nodeToDownload.getFile().getAbsolutePath());
+        int filesCount = 0;
+        try {
+            filesCount = Integer.parseInt(statusExchanger.exchange("OK"));
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        if (filesCount == 0){
+            messageWindow.show("Warning", "No files to download", MessageWindow.Type.INFORMATION);
+            return;
+        }
+        waitingAllFiles = new CountDownLatch(filesCount);
+        boolean result = false;
+        try {
+            result = waitingAllFiles.await(2, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+            result = false;
+        }
+        if (result)
+            messageWindow.show("Download", "Download completed. " + countFiles + " files downloaded", MessageWindow.Type.INFORMATION);
+        else
+            messageWindow.show("Error", "Download awaiting timeout. Please try again later", MessageWindow.Type.INFORMATION);
+    }
     @FXML
     public void onUploadButton(){}
     @FXML
