@@ -14,6 +14,7 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.layout.VBox;
 import javafx.scene.robot.Robot;
 
 import java.awt.*;
@@ -28,9 +29,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainWindow implements ServerCommands {
     @FXML
-    public TreeView <FilesTree> treeView;
+    public TreeView<FilesTree> treeView;
     @FXML
-    public TableView <FilesTree> tableView;
+    public TableView<FilesTree> tableView;
     @FXML
     private TableColumn<FilesTree, String> columnName;
     @FXML
@@ -53,6 +54,10 @@ public class MainWindow implements ServerCommands {
     private Button renameButton;
     @FXML
     private Button logoutButton;
+    @FXML
+    private VBox progressBox;
+    @FXML
+    private ImageView progressImageView;
 
     private Image iconFolder;
     private SocketChannel socketChannel;
@@ -67,7 +72,7 @@ public class MainWindow implements ServerCommands {
     private int countFiles;
     private final int DEFAULT_BUFFER = 2048;
 
-    public void main(){
+    public void main() {
         statusExchanger = new Exchanger<>();
         setupVisualElements();
 
@@ -77,12 +82,12 @@ public class MainWindow implements ServerCommands {
             e.printStackTrace();
         }
 
-       new Thread(()->{
+        new Thread(() -> {
             try {
                 while (true) {
                     String header = readHeader(COMMAND_LENGTH);
                     System.out.println("Header: " + header);
-                    if (header.startsWith(FILES_TREE)){
+                    if (header.startsWith(FILES_TREE)) {
                         int objectSize = Integer.parseInt(header.split(SEPARATOR)[1]);
                         System.out.println("Object size " + objectSize);
                         try {
@@ -90,7 +95,7 @@ public class MainWindow implements ServerCommands {
                         } catch (ClassNotFoundException e) {
                             e.printStackTrace();
                         }
-                        Platform.runLater(()->{
+                        Platform.runLater(() -> {
                             refreshFilesTreeAndTable(filesTree);
                         });
                     } else if (header.startsWith(RENAMSTATUS) || header.startsWith(REMSTATUS) || header.startsWith(NEWFOLDSTATUS)) {
@@ -121,10 +126,10 @@ public class MainWindow implements ServerCommands {
                                 messageWindow.show("Error", msg, MessageWindow.Type.INFORMATION);
                             });
                         }
-                    } else if (header.startsWith(INFO)){
+                    } else if (header.startsWith(INFO)) {
                         String msg = readMessage();
                         System.out.println(msg);
-                        Platform.runLater(()->{
+                        Platform.runLater(() -> {
                             messageWindow.show("Info", msg, MessageWindow.Type.INFORMATION);
                         });
                     }
@@ -135,12 +140,12 @@ public class MainWindow implements ServerCommands {
         }).start();
     }
 
-    private String readMessage() throws IOException{
+    private String readMessage() throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         socketChannel.read(buffer);
         buffer.flip();
         String s = "";
-        while (buffer.hasRemaining()){
+        while (buffer.hasRemaining()) {
             s += (char) buffer.get();
         }
         return s;
@@ -151,25 +156,25 @@ public class MainWindow implements ServerCommands {
         String s = "";
         socketChannel.read(buffer);
         buffer.flip();
-        while (buffer.hasRemaining()){
+        while (buffer.hasRemaining()) {
             s += (char) buffer.get();
         }
         return s;
     }
 
-    private String readMessageInfo(){
+    private String readMessageInfo() {
         String str = "";
         try {
-            while (!str.endsWith(SEPARATOR)){
+            while (!str.endsWith(SEPARATOR)) {
                 str += readHeader(1);
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return str.substring(0,str.length()-SEPARATOR.length());
+        return str.substring(0, str.length() - SEPARATOR.length());
     }
 
-    private void readFile(int fileLength, String path){
+    private void readFile(int fileLength, String path) {
         System.out.println("File path: " + path + " | File length " + fileLength);
         int bufferSize = fileLength > DEFAULT_BUFFER ? DEFAULT_BUFFER : fileLength;
         try {
@@ -181,7 +186,7 @@ public class MainWindow implements ServerCommands {
             ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
             int n = 0;
             int read = 0;
-            while ((read = socketChannel.read(buffer)) > 0 ) {
+            while ((read = socketChannel.read(buffer)) > 0) {
                 buffer.flip();
                 fileChannel.write(buffer);
                 n = n + read;
@@ -199,9 +204,12 @@ public class MainWindow implements ServerCommands {
             }
             System.out.println("File with " + fileLength + " bytes downloaded");
             countFiles++;
-        } catch (IOException e){
+        } catch (IOException e) {
             e.printStackTrace();
-            messageWindow.show("Error", "Error reading file " + filesTree.getName(), MessageWindow.Type.INFORMATION);
+            Platform.runLater(() -> {
+                progressBox.setVisible(false);
+                messageWindow.show("Error", "Error reading file " + filesTree.getName(), MessageWindow.Type.INFORMATION);
+            });
         } finally {
             waitingAllFiles.countDown();
         }
@@ -219,13 +227,13 @@ public class MainWindow implements ServerCommands {
         treeView.setRoot(rootItem);
     }
 
-    private void setSelectedTreeItem (TreeItem<FilesTree> item){
+    private void setSelectedTreeItem(TreeItem<FilesTree> item) {
         treeView.getSelectionModel().select(item);
         item.setExpanded(true);
         selectItem();
     }
 
-    private TreeItem<FilesTree> getTreeItemByValue (TreeItem<FilesTree> treeRoot, FilesTree value){
+    private TreeItem<FilesTree> getTreeItemByValue(TreeItem<FilesTree> treeRoot, FilesTree value) {
         TreeItem<FilesTree> result;
         if (treeRoot.getValue() != null && treeRoot.getValue().equals(value))
             return treeRoot;
@@ -238,7 +246,7 @@ public class MainWindow implements ServerCommands {
         return null;
     }
 
-    public TreeItem<FilesTree> buildTreeView (FilesTree node){
+    public TreeItem<FilesTree> buildTreeView(FilesTree node) {
         if (node.isDirectory()) {
             TreeItem<FilesTree> item = new TreeItem<>(node, new ImageView(iconFolder));
             for (FilesTree f : node.getChildren()) {
@@ -249,18 +257,21 @@ public class MainWindow implements ServerCommands {
         }
         return null;
     }
-    private void requestFilesTreeRefresh(){
+
+    private void requestFilesTreeRefresh() {
         send(GETFILELIST);
     }
-    private void requestRename(String path, String newName){
+
+    private void requestRename(String path, String newName) {
         String str = RENAME + SEPARATOR + path + SEPARATOR + newName;
         send(str);
     }
-    private void requestRemove(String path){
+
+    private void requestRemove(String path) {
         send(REMOVE + SEPARATOR + path);
     }
 
-    private void removeItem(FilesTree nodeToRemove){
+    private void removeItem(FilesTree nodeToRemove) {
         // удалить файл из FilesTree
         String parent = nodeToRemove.getFile().getParent();
         filesTree.removeChild(nodeToRemove);
@@ -285,13 +296,14 @@ public class MainWindow implements ServerCommands {
         }
         buffer.clear();
     }
+
     @FXML
-    public void selectItem(){
+    public void selectItem() {
         TreeItem<FilesTree> item = (TreeItem<FilesTree>) treeView.getSelectionModel().getSelectedItem();
         if (item != null) {
             tableView.getItems().clear();
             FilesTree node = item.getValue();
-            for (FilesTree f:node.getChildren()) {
+            for (FilesTree f : node.getChildren()) {
                 tableView.getItems().add(f);
             }
             tableView.sort();
@@ -299,48 +311,64 @@ public class MainWindow implements ServerCommands {
     }
 
     @FXML
-    public void onDownloadButton(){
+    public void onDownloadButton() {
         countFiles = 0;
         if (tableView.getSelectionModel().getSelectedCells().isEmpty()) {
             messageWindow.show("Warning", "No files selected", MessageWindow.Type.INFORMATION);
             return;
         }
-        TablePosition pos = tableView.getSelectionModel().getSelectedCells().get(0);
-        FilesTree nodeToDownload = tableView.getItems().get(pos.getRow());
-        nodeParentPath = nodeToDownload.getFile().getParent();
-        send(DOWNLOAD + SEPARATOR + nodeToDownload.getFile().getAbsolutePath());
-        int filesCount = 0;
-        try {
-            filesCount = Integer.parseInt(statusExchanger.exchange("OK"));
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        if (filesCount == 0){
-            messageWindow.show("Warning", "No files to download", MessageWindow.Type.INFORMATION);
-            return;
-        }
-        waitingAllFiles = new CountDownLatch(filesCount);
-        boolean result = false;
-        try {
-            result = waitingAllFiles.await(2, TimeUnit.MINUTES);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-            result = false;
-        }
-        if (result) {
-            messageWindow.show("Download", "Download completed. " + countFiles + " files downloaded", MessageWindow.Type.CONFIRMATION, "Open folder");
+        new Thread(() -> {
+            Platform.runLater(() -> {
+                progressBox.setVisible(true);
+            });
+            TablePosition pos = tableView.getSelectionModel().getSelectedCells().get(0);
+            FilesTree nodeToDownload = tableView.getItems().get(pos.getRow());
+            nodeParentPath = nodeToDownload.getFile().getParent();
+            send(DOWNLOAD + SEPARATOR + nodeToDownload.getFile().getAbsolutePath());
+            int filesCount = 0;
             try {
-                if (!messageWindow.getResult())
-                    Desktop.getDesktop().open(new File(downloadPath));
-            } catch (IOException e) {
+                filesCount = Integer.parseInt(statusExchanger.exchange("OK"));
+            } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-            return;
-        } else
-            messageWindow.show("Error", "Download awaiting timeout. Please try again later", MessageWindow.Type.INFORMATION);
+            if (filesCount == 0) {
+                Platform.runLater(() -> {
+                    progressBox.setVisible(false);
+                    messageWindow.show("Warning", "No files to download", MessageWindow.Type.INFORMATION);
+                });
+                return;
+            }
+            waitingAllFiles = new CountDownLatch(filesCount);
+            boolean result;
+            try {
+                result = waitingAllFiles.await(2, TimeUnit.MINUTES);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                result = false;
+            }
+            boolean result1 = result;
+            Platform.runLater(() -> {
+                if (result1) {
+                    progressBox.setVisible(false);
+                    messageWindow.show("Download", "Download completed. " + countFiles + " files downloaded", MessageWindow.Type.CONFIRMATION, "Open folder");
+                    try {
+                        if (!messageWindow.getResult())
+                            Desktop.getDesktop().open(new File(downloadPath));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                } else {
+                    progressBox.setVisible(false);
+                    messageWindow.show("Error", "Download awaiting timeout. Please try again later", MessageWindow.Type.INFORMATION);
+                }
+            });
+        }).start();
     }
+
     @FXML
-    public void onUploadButton(){}
+    public void onUploadButton() {
+    }
+
     @FXML
     public void onRenameButton() {
         if (tableView.getSelectionModel().getSelectedCells().isEmpty()) {
@@ -351,8 +379,9 @@ public class MainWindow implements ServerCommands {
         Robot robot = new Robot();
         robot.keyPress(KeyCode.ENTER);
     }
+
     @FXML
-    public void onRemoveButton(){
+    public void onRemoveButton() {
         FilesTree nodeToRemove;
         try {
             if (tableView.getSelectionModel().getSelectedCells().isEmpty()) {
@@ -362,7 +391,7 @@ public class MainWindow implements ServerCommands {
                 TablePosition pos = tableView.getSelectionModel().getSelectedCells().get(0);
                 nodeToRemove = tableView.getItems().get(pos.getRow());
                 if (nodeToRemove.equals(filesTree)) {
-                    messageWindow.show("Removal failed","Cannot remove root folder", MessageWindow.Type.INFORMATION);
+                    messageWindow.show("Removal failed", "Cannot remove root folder", MessageWindow.Type.INFORMATION);
                     return;
                 }
                 messageWindow.show("Please confirm", "Are you sure to remove '" + nodeToRemove.getName() + "'?", MessageWindow.Type.CONFIRMATION);
@@ -382,14 +411,16 @@ public class MainWindow implements ServerCommands {
             e.printStackTrace();
         }
     }
+
     @FXML
-    public void onRefreshButton(){
+    public void onRefreshButton() {
         requestFilesTreeRefresh();
     }
+
     @FXML
-    public void onAddFolderButton(){
+    public void onAddFolderButton() {
         InputWindow inputWindow = new InputWindow();
-        inputWindow.show("New Folder","Please enter folder name", "New Folder");
+        inputWindow.show("New Folder", "Please enter folder name", "New Folder");
         String name = inputWindow.getResult();
         System.out.println("New folder name: " + name);
         if (name == null) return;
@@ -421,17 +452,19 @@ public class MainWindow implements ServerCommands {
         }
 
     }
+
     @FXML
-    public void onLogoutButton(){
+    public void onLogoutButton() {
 
     }
+
     @FXML
-    public void keyboardHandler(KeyEvent ke){
+    public void keyboardHandler(KeyEvent ke) {
         if (ke.getCode().equals(KeyCode.DELETE))
             onRemoveButton();
     }
 
-    public void onExit(){
+    public void onExit() {
         try {
             send(END);
             socketChannel.close();
@@ -441,23 +474,25 @@ public class MainWindow implements ServerCommands {
         System.out.println("Main Window is closing");
     }
 
-    public void setupVisualElements(){
+    public void setupVisualElements() {
         newFolderLock = new AtomicInteger(0);
+        progressBox.setManaged(false);
+        progressBox.setVisible(false);
         messageWindow = new MessageWindow();
-        iconFolder = new Image(getClass().getResourceAsStream("folder_icon.png"),20,20,true,false);
-        Image iconDownload = new Image(getClass().getResourceAsStream("download_icon.png"),48,48,true,false);
+        iconFolder = new Image(getClass().getResourceAsStream("folder_icon.png"), 20, 20, true, false);
+        Image iconDownload = new Image(getClass().getResourceAsStream("download_icon.png"), 48, 48, true, false);
         downloadButton.setGraphic(new ImageView(iconDownload));
-        Image iconUpload = new Image(getClass().getResourceAsStream("upload_icon.png"),48,48,true,false);
+        Image iconUpload = new Image(getClass().getResourceAsStream("upload_icon.png"), 48, 48, true, false);
         uploadButton.setGraphic(new ImageView(iconUpload));
-        Image iconAddFolder = new Image(getClass().getResourceAsStream("addFolder_icon.png"),48,48,true,false);
+        Image iconAddFolder = new Image(getClass().getResourceAsStream("addFolder_icon.png"), 48, 48, true, false);
         addFolderButton.setGraphic(new ImageView(iconAddFolder));
-        Image iconLogout = new Image(getClass().getResourceAsStream("logout_icon.png"),48,48,true,false);
+        Image iconLogout = new Image(getClass().getResourceAsStream("logout_icon.png"), 48, 48, true, false);
         logoutButton.setGraphic(new ImageView(iconLogout));
-        Image iconRefresh = new Image(getClass().getResourceAsStream("refresh_icon.png"),48,48,true,false);
+        Image iconRefresh = new Image(getClass().getResourceAsStream("refresh_icon.png"), 48, 48, true, false);
         refreshButton.setGraphic(new ImageView(iconRefresh));
-        Image iconRemove = new Image(getClass().getResourceAsStream("remove_icon.png"),48,48,true,false);
+        Image iconRemove = new Image(getClass().getResourceAsStream("remove_icon.png"), 48, 48, true, false);
         removeButton.setGraphic(new ImageView(iconRemove));
-        Image iconRename = new Image(getClass().getResourceAsStream("rename_icon.png"),48,48,true,false);
+        Image iconRename = new Image(getClass().getResourceAsStream("rename_icon.png"), 48, 48, true, false);
         renameButton.setGraphic(new ImageView(iconRename));
 
 
@@ -468,13 +503,18 @@ public class MainWindow implements ServerCommands {
         tableView.getSortOrder().add(columnType);
         columnName.setCellFactory(TextFieldTableCell.<FilesTree>forTableColumn());
 
+        Image progressGif = new Image(getClass().getResourceAsStream("spinner.gif"), 80, 80, true, false);
+        ;
+        progressImageView.setImage(progressGif);
+
+
         columnName.setOnEditCommit(
                 (EventHandler<TableColumn.CellEditEvent<FilesTree, String>>) t -> {
                     System.out.println("On edit commit called");
                     FilesTree changedNode = ((FilesTree) t.getTableView().getItems().get(t.getTablePosition().getRow()));
                     String s = t.getNewValue();
 
-                    if (changedNode.equals(filesTree)){
+                    if (changedNode.equals(filesTree)) {
                         messageWindow.show("Rename failed", "Cannot rename root folder", MessageWindow.Type.INFORMATION);
                         return;
                     }
@@ -508,7 +548,7 @@ public class MainWindow implements ServerCommands {
 
         //тут мы делаем так, чтобы при двойном клике на папке в табличной части автоматически выделялся
         // соответствующий узел дерева каталогов и мы проваливались в эту папку
-        tableView.setRowFactory( tv -> {
+        tableView.setRowFactory(tv -> {
             TableRow<FilesTree> row = new TableRow<>();
             row.setOnMouseClicked(event -> {
                 if (event.getClickCount() >= 2) {
@@ -518,7 +558,7 @@ public class MainWindow implements ServerCommands {
                         setSelectedTreeItem(selectedTreeItem);
                 }
             });
-            return row ;
+            return row;
         });
     }
 

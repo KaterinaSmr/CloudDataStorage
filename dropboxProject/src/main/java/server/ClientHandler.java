@@ -5,6 +5,7 @@ import common.MyObjectOutputStream;
 import common.ServerCommands;
 
 import java.io.*;
+import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
@@ -43,16 +44,16 @@ public class ClientHandler implements ServerCommands {
                 } else sendInfo("Wrong login/password");
             } else if (s.startsWith(GETFILELIST)) {
                 sendFilesTree();
-            } else if (s.startsWith(RENAME)){
+            } else if (s.startsWith(RENAME)) {
                 String[] strings = s.split(SEPARATOR);
                 rename(strings[1], strings[2]);
-            } else if (s.startsWith(REMOVE)){
+            } else if (s.startsWith(REMOVE)) {
                 String[] strings = s.split(SEPARATOR);
                 remove(strings[1]);
-            } else if(s.startsWith(NEWFOLDER)){
+            } else if (s.startsWith(NEWFOLDER)) {
                 String[] strings = s.split(SEPARATOR);
                 createFolder(strings[1], strings[2]);
-            } else if(s.startsWith(DOWNLOAD)){
+            } else if (s.startsWith(DOWNLOAD)) {
                 String[] strings = s.split(SEPARATOR);
                 int filesQty = countFiles(strings[1]);
                 System.out.println("qty of files to send: " + filesQty);
