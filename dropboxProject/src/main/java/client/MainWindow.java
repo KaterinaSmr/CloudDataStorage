@@ -7,6 +7,7 @@ import javafx.application.Platform;
 import javafx.event.EventHandler;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
+import javafx.scene.control.Button;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.image.Image;
@@ -15,6 +16,7 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.robot.Robot;
 
+import java.awt.*;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -63,7 +65,7 @@ public class MainWindow implements ServerCommands {
     private String nodeParentPath;
     private CountDownLatch waitingAllFiles;
     private int countFiles;
-    private final int DEFAULT_BUFFER = 1024;
+    private final int DEFAULT_BUFFER = 2048;
 
     public void main(){
         statusExchanger = new Exchanger<>();
@@ -325,9 +327,16 @@ public class MainWindow implements ServerCommands {
             e.printStackTrace();
             result = false;
         }
-        if (result)
-            messageWindow.show("Download", "Download completed. " + countFiles + " files downloaded", MessageWindow.Type.INFORMATION);
-        else
+        if (result) {
+            messageWindow.show("Download", "Download completed. " + countFiles + " files downloaded", MessageWindow.Type.CONFIRMATION, "Open folder");
+            try {
+                if (!messageWindow.getResult())
+                    Desktop.getDesktop().open(new File(downloadPath));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return;
+        } else
             messageWindow.show("Error", "Download awaiting timeout. Please try again later", MessageWindow.Type.INFORMATION);
     }
     @FXML

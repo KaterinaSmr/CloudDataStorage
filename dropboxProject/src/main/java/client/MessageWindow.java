@@ -67,6 +67,19 @@ public class MessageWindow {
         window.showAndWait();
     }
 
+    public void show (String title, String message, Type type, String name){
+        result = false;
+        buttonCancel.setText(name);
+        window.setTitle(title);
+        label.setText(message);
+        buttonPane.getChildren().clear();
+        buttonPane.getChildren().add(buttonOk);
+        if (type.equals(Type.CONFIRMATION)){
+            buttonPane.getChildren().add(buttonCancel);
+        }
+        window.showAndWait();
+    }
+
     public boolean getResult(){
         return result;
     }
