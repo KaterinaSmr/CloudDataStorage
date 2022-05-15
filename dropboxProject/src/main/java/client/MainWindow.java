@@ -16,6 +16,7 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.VBox;
 import javafx.scene.robot.Robot;
+import javafx.stage.DirectoryChooser;
 
 import java.awt.*;
 import java.io.File;
@@ -176,7 +177,7 @@ public class MainWindow implements ServerCommands {
 
     private void readFile(int fileLength, String path) {
         System.out.println("File path: " + path + " | File length " + fileLength);
-        int bufferSize = fileLength > DEFAULT_BUFFER ? DEFAULT_BUFFER : fileLength;
+        int bufferSize = Math.min(fileLength, DEFAULT_BUFFER);
         try {
             File file = new File(path);
             File parentDir = file.getParentFile();
@@ -189,7 +190,7 @@ public class MainWindow implements ServerCommands {
             while ((read = socketChannel.read(buffer)) > 0) {
                 buffer.flip();
                 fileChannel.write(buffer);
-                n = n + read;
+                n += read;
                 buffer.clear();
                 if ((fileLength - n) < bufferSize) break;
             }
@@ -197,6 +198,7 @@ public class MainWindow implements ServerCommands {
             if (remainingBytes > 0) {
                 ByteBuffer buffer1 = ByteBuffer.allocate(remainingBytes);
                 read = socketChannel.read(buffer1);
+                buffer1.flip();
                 fileChannel.write(buffer1);
                 n += read;
                 buffer.clear();
@@ -317,6 +319,14 @@ public class MainWindow implements ServerCommands {
             messageWindow.show("Warning", "No files selected", MessageWindow.Type.INFORMATION);
             return;
         }
+        DirectoryChooser directoryChooser = new DirectoryChooser();
+        File selectedDirectory = directoryChooser.showDialog(downloadButton.getScene().getWindow());
+        if(selectedDirectory == null){
+            return;
+        }else{
+            downloadPath = selectedDirectory.getAbsolutePath() + "/";
+        }
+        System.out.println("Download path: " + downloadPath);
         new Thread(() -> {
             Platform.runLater(() -> {
                 progressBox.setVisible(true);
@@ -476,7 +486,6 @@ public class MainWindow implements ServerCommands {
 
     public void setupVisualElements() {
         newFolderLock = new AtomicInteger(0);
-        progressBox.setManaged(false);
         progressBox.setVisible(false);
         messageWindow = new MessageWindow();
         iconFolder = new Image(getClass().getResourceAsStream("folder_icon.png"), 20, 20, true, false);
@@ -503,8 +512,7 @@ public class MainWindow implements ServerCommands {
         tableView.getSortOrder().add(columnType);
         columnName.setCellFactory(TextFieldTableCell.<FilesTree>forTableColumn());
 
-        Image progressGif = new Image(getClass().getResourceAsStream("spinner.gif"), 80, 80, true, false);
-        ;
+        Image progressGif = new Image(getClass().getResourceAsStream("spinner.gif"), 60, 60, true, false);
         progressImageView.setImage(progressGif);
 
 
