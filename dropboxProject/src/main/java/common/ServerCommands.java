@@ -1,23 +1,23 @@
 package common;
 
 public interface ServerCommands {
-    String AUTH = "/reqauthoriz";
-    String GETFILELIST = "/reqfilelist";
+    String AUTH = "/reqauthor";
+    String GETFILELIST = "/reqfileli";
     String RENAME = "/reqrename";
-    String RENAMSTATUS = "/renamstatus";
-    String REMOVE = "/reqtoremove";
-    String REMSTATUS = "/removalstat";
-    String NEWFOLDER = "/reqnewfoldr";
-    String NEWFOLDSTATUS = "/newfoldstat";
-    String DOWNLOAD = "/reqdownload";
-    String DOWNLCOUNT = "/downlocount";
-    String DOWNLSTATUS = "/downsta";
+    String RENAMSTATUS = "/renamstat";
+    String REMOVE = "/reqremove";
+    String REMSTATUS = "/removalst";
+    String NEWFOLDER = "/reqnewdir";
+    String NEWFOLDSTATUS = "/newdirsta";
+    String DOWNLOAD = "/reqdownlo";
+    String DOWNLCOUNT = "/downloqty";
+    String DOWNLSTATUS = "/downs";
     String OK = "OK";
     String NOK = "NO";
-    String AUTHOK ="/authorizaok";
-    String INFO = "/infomessage";
+    String AUTHOK ="/authoriok";
+    String INFO = "/infomessa";
     String SEPARATOR = "//";
     String END = "/end";
-    String FILES_TREE = "/tree";
-    int COMMAND_LENGTH = 12;
+    String FILES_TREE = "/filestree";
+    int COMMAND_LENGTH = 10;
 }

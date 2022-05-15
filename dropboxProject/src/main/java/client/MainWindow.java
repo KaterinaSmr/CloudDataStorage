@@ -89,7 +89,7 @@ public class MainWindow implements ServerCommands {
                     String header = readHeader(COMMAND_LENGTH);
                     System.out.println("Header: " + header);
                     if (header.startsWith(FILES_TREE)) {
-                        int objectSize = Integer.parseInt(header.split(SEPARATOR)[1]);
+                        int objectSize = Integer.parseInt(readMessageInfo());
                         System.out.println("Object size " + objectSize);
                         try {
                             filesTree = (FilesTree) inObjStream.readObject(objectSize);
