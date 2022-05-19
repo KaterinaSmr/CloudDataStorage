@@ -1,5 +1,6 @@
 package common;
 
+import javax.sound.midi.Soundbank;
 import java.io.File;
 import java.io.Serializable;
 import java.text.DateFormat;
@@ -78,6 +79,8 @@ public class FilesTree implements Serializable {
     }
 
     public FilesTree validateFile(String path){
+        System.out.println("Validate path checked path: " + path);
+        System.out.println("Checked node: " + this.getFile().getAbsolutePath());
         FilesTree result = null;
         if (this.getFile().getAbsolutePath().equals(path))
             return this;

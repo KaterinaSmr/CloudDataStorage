@@ -17,9 +17,11 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.VBox;
 import javafx.scene.robot.Robot;
 import javafx.stage.DirectoryChooser;
+import javafx.stage.FileChooser;
 
 import java.awt.*;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -66,12 +68,10 @@ public class MainWindow implements ServerCommands {
     private FilesTree filesTree = null;
     private Exchanger<String> statusExchanger;
     private MessageWindow messageWindow;
-    private AtomicInteger newFolderLock;
     private String downloadPath = "D:/Downloads/";
     private String nodeParentPath;
     private CountDownLatch waitingAllFiles;
     private int countFiles;
-    private final int DEFAULT_BUFFER = 2048;
 
     public void main() {
         statusExchanger = new Exchanger<>();
@@ -126,6 +126,12 @@ public class MainWindow implements ServerCommands {
                             Platform.runLater(() -> {
                                 messageWindow.show("Error", msg, MessageWindow.Type.INFORMATION);
                             });
+                        }
+                    } else if (header.startsWith(UPLOADSTAT)) {
+                        try {
+                            statusExchanger.exchange(readMessageInfo());
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
                         }
                     } else if (header.startsWith(INFO)) {
                         String msg = readMessage();
@@ -206,11 +212,12 @@ public class MainWindow implements ServerCommands {
             }
             System.out.println("File with " + fileLength + " bytes downloaded");
             countFiles++;
+            out.close();
         } catch (IOException e) {
             e.printStackTrace();
             Platform.runLater(() -> {
                 progressBox.setVisible(false);
-                messageWindow.show("Error", "Error reading file " + filesTree.getName(), MessageWindow.Type.INFORMATION);
+                messageWindow.show("Error", "Error sending file " + filesTree.getName(), MessageWindow.Type.INFORMATION);
             });
         } finally {
             waitingAllFiles.countDown();
@@ -266,10 +273,12 @@ public class MainWindow implements ServerCommands {
 
     private void requestRename(String path, String newName) {
         String str = RENAME + SEPARATOR + path + SEPARATOR + newName;
+        System.out.println("Rename: " + str);
         send(str);
     }
 
     private void requestRemove(String path) {
+        System.out.println("Removal path: " + path);
         send(REMOVE + SEPARATOR + path);
     }
 
@@ -377,6 +386,70 @@ public class MainWindow implements ServerCommands {
 
     @FXML
     public void onUploadButton() {
+        TreeItem<FilesTree> currentTreeItem = (TreeItem<FilesTree>) treeView.getSelectionModel().getSelectedItem();
+        if (currentTreeItem == null){
+            messageWindow.show("Error", "Destination folder not selected", MessageWindow.Type.INFORMATION);
+            return;
+        }
+        FilesTree parent = currentTreeItem.getValue();
+
+        FileChooser fileChooser = new FileChooser();
+        File selectedFile = fileChooser.showOpenDialog(uploadButton.getScene().getWindow());
+        if (selectedFile == null){
+            return;
+        } else {
+            System.out.println("Selected File: " + selectedFile.getAbsolutePath());
+        }
+        new Thread(()->{
+            Platform.runLater(()->{
+                progressBox.setVisible(true);
+            });
+            String uploadStatMsg = "";
+            try {
+                FileInputStream fis = new FileInputStream(selectedFile);
+                FileChannel fc = fis.getChannel();
+                ByteBuffer bufferOut = ByteBuffer.allocate((int) selectedFile.length());
+                String msgToServer = UPLOAD + SEPARATOR + parent.getFile().getAbsolutePath() + SEPARATOR + selectedFile.getName() + SEPARATOR + selectedFile.length() + SEPARATOR;
+                System.out.println("Message to Server " + msgToServer);
+                send(msgToServer);
+                int size = 0;
+                int read = 0;
+                while ((read = fc.read(bufferOut)) > 0 || bufferOut.position() > 0) {
+                    bufferOut.flip();
+                    size += read;
+                    socketChannel.write(bufferOut);
+                    bufferOut.compact();
+                }
+                String strings[] = statusExchanger.exchange(OK).split(SEPARATOR);
+                if (strings[0].startsWith(NOK)){
+                    messageWindow.show("Error", strings[1], MessageWindow.Type.INFORMATION);
+                    return;
+                }
+                //обновить filesTree -> TreeView -> TableView
+                String newFilePath = parent.getFile().getAbsolutePath() + "/" + selectedFile.getName();
+                File newFile = new File(newFilePath);
+                FilesTree newNode = new FilesTree(newFile, false);
+                parent.addChild(newNode);
+                treeView.refresh();
+                setSelectedTreeItem(currentTreeItem);
+                uploadStatMsg = "Upload finished";
+                fis.close();
+            } catch (IOException e) {
+                uploadStatMsg = "Upload failed. Please try again later";
+                e.printStackTrace();
+            } catch (InterruptedException e){
+                uploadStatMsg = "Unknown error. Please refresh and try again";
+                e.printStackTrace();
+            } finally {
+                String status = uploadStatMsg;
+                Platform.runLater(()->{
+                    progressBox.setVisible(false);
+                    messageWindow.show("Info", status, MessageWindow.Type.INFORMATION);
+                });
+
+            }
+        }).start();
+
     }
 
     @FXML
@@ -455,7 +528,7 @@ public class MainWindow implements ServerCommands {
                 setSelectedTreeItem(newTreeItem.getParent());
             } else {
                 System.out.println(resp);
-                messageWindow.show("Creation failed", resp, MessageWindow.Type.INFORMATION);
+                messageWindow.show("Failed", resp, MessageWindow.Type.INFORMATION);
             }
         } catch (InterruptedException e) {
             e.printStackTrace();
@@ -485,7 +558,6 @@ public class MainWindow implements ServerCommands {
     }
 
     public void setupVisualElements() {
-        newFolderLock = new AtomicInteger(0);
         progressBox.setVisible(false);
         messageWindow = new MessageWindow();
         iconFolder = new Image(getClass().getResourceAsStream("folder_icon.png"), 20, 20, true, false);

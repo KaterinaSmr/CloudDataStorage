@@ -3,9 +3,7 @@ package server;
 import common.FilesTree;
 import common.MyObjectOutputStream;
 import common.ServerCommands;
-
 import java.io.*;
-import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
@@ -24,42 +22,42 @@ public class ClientHandler implements ServerCommands {
             this.outObjStream = new MyObjectOutputStream(socketChannel);
     }
     public void read(){
-        ByteBuffer buffer = ByteBuffer.allocate(256);
+//        ByteBuffer buffer = ByteBuffer.allocate(256);
         try {
-            socketChannel.read(buffer);
-            buffer.flip();
-            StringBuilder sb = new StringBuilder();
-            while (buffer.hasRemaining()) {
-                sb.append((char) buffer.get());
-            }
-            buffer.clear();
-            String s = sb.toString();
-            System.out.println("Echo: " + s);
-            if (s.startsWith(AUTH)) {
-                user = serverChannel.authorizeMe(s.split(SEPARATOR)[1], s.split(SEPARATOR)[2]);
+            String header = readHeader(COMMAND_LENGTH + SEPARATOR.length());
+            System.out.print("Echo: " + header);
+            if (header.startsWith(AUTH)) {
+                String msg = readMessage();
+                user = serverChannel.authorizeMe(msg.split(SEPARATOR)[0], msg.split(SEPARATOR)[1]);
                 if (user != null) {
                     System.out.println("login ok " + user.getId());
                     sendInfo(AUTHOK + SEPARATOR + user.getId());
-                    mainDirectory = mainDirectory = user.getPath().toFile();
+                    mainDirectory = user.getPath().toFile();
                 } else sendInfo("Wrong login/password");
-            } else if (s.startsWith(GETFILELIST)) {
+            } else if (header.startsWith(GETFILELIST)) {
                 sendFilesTree();
-            } else if (s.startsWith(RENAME)) {
-                String[] strings = s.split(SEPARATOR);
-                rename(strings[1], strings[2]);
-            } else if (s.startsWith(REMOVE)) {
-                String[] strings = s.split(SEPARATOR);
-                remove(strings[1]);
-            } else if (s.startsWith(NEWFOLDER)) {
-                String[] strings = s.split(SEPARATOR);
-                createFolder(strings[1], strings[2]);
-            } else if (s.startsWith(DOWNLOAD)) {
-                String[] strings = s.split(SEPARATOR);
-                int filesQty = countFiles(strings[1]);
+            } else if (header.startsWith(RENAME)) {
+                String[] strings = readMessage().split(SEPARATOR);
+                rename(strings[0], strings[1]);
+            } else if (header.startsWith(REMOVE)) {
+                String[] strings = readMessage().split(SEPARATOR);
+                remove(strings[0]);
+            } else if (header.startsWith(NEWFOLDER)) {
+                String[] strings = readMessage().split(SEPARATOR);
+                createFolder(strings[0], strings[1]);
+            } else if (header.startsWith(DOWNLOAD)) {
+                String[] strings = readMessage().split(SEPARATOR);
+                int filesQty = countFiles(strings[0]);
                 System.out.println("qty of files to send: " + filesQty);
                 sendInfo(DOWNLCOUNT + filesQty + SEPARATOR);
-                sendFiles(strings[1]);
-            } else if (s.startsWith(END)) {
+                sendFiles(strings[0]);
+            } else if (header.startsWith(UPLOAD)) {
+                String path = readMessageInfo();
+                String fileName = readMessageInfo();
+                int fileSize = Integer.parseInt(readMessageInfo());
+                System.out.println("Path: " + path + " | fileName: " + fileName + " | fileSize: " + fileSize);
+                downloadFile(path, fileName, fileSize);
+            } else if (header.startsWith(END)) {
                 serverChannel.unSubscribeMe(this);
             }
         } catch (IOException e) {
@@ -133,6 +131,56 @@ public class ClientHandler implements ServerCommands {
         }
     }
 
+    private void downloadFile(String path, String name, int size){
+        rootNode = new FilesTree(mainDirectory);
+        FilesTree parent = rootNode.validateFile(path);
+        if (parent == null) {
+            sendInfo(UPLOADSTAT + SEPARATOR + NOK + SEPARATOR + "Upload failed. Parent directory not found on server. Please refresh and try again");
+            return;
+        }
+        String newFilePath = path + "/" + name;
+        System.out.println("new file path: " + newFilePath);
+        readFile(size, newFilePath);
+    }
+
+    private void readFile(int fileLength, String path) {
+        int bufferSize = Math.min(fileLength, DEFAULT_BUFFER);
+        System.out.println("Buffer size = " + bufferSize);
+        try {
+            File file = new File(path);
+            FileOutputStream out = new FileOutputStream(path);
+            FileChannel fileChannel = out.getChannel();
+            ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+            int n = 0;
+            int read = socketChannel.read(buffer);
+            int remainingBytes;
+            while ((remainingBytes = fileLength - n) > bufferSize){
+                n += read;
+                buffer.flip();
+                fileChannel.write(buffer);
+                buffer.clear();
+                read = socketChannel.read(buffer);
+            }
+
+            if (remainingBytes > 0) {
+                ByteBuffer buffer1 = ByteBuffer.allocate(remainingBytes);
+                read = socketChannel.read(buffer1);
+                System.out.println("RRRRead: " + read);
+                buffer1.flip();
+                fileChannel.write(buffer1);
+                n += read;
+                buffer.clear();
+                System.out.println("Length " + n);
+            }
+            System.out.println("File with " + n + " bytes downloaded");
+            sendInfo(UPLOADSTAT + SEPARATOR + OK);
+            out.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            sendInfo(UPLOADSTAT + SEPARATOR + NOK + SEPARATOR + "Upload failed. Please try again later.");
+        }
+    }
+
     private int countFiles(String path){
         rootNode = new FilesTree(mainDirectory);
         FilesTree node = rootNode.validateFile(path);
@@ -190,6 +238,40 @@ public class ClientHandler implements ServerCommands {
             }
         }
         return file.delete();
+    }
+
+    private String readMessage() throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        socketChannel.read(buffer);
+        buffer.flip();
+        String s = "";
+        while (buffer.hasRemaining()) {
+            s += (char) buffer.get();
+        }
+        return s;
+    }
+
+    private String readHeader(int bufferSize) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+        String s = "";
+        socketChannel.read(buffer);
+        buffer.flip();
+        while (buffer.hasRemaining()) {
+            s += (char) buffer.get();
+        }
+        return s;
+    }
+
+    private String readMessageInfo() {
+        String str = "";
+        try {
+            while (!str.endsWith(SEPARATOR)) {
+                str += readHeader(1);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return str.substring(0, str.length() - SEPARATOR.length());
     }
 
     public SocketChannel getSocketChannel() {

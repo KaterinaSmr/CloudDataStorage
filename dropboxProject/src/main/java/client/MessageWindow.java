@@ -3,6 +3,7 @@ package client;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -30,6 +31,8 @@ public class MessageWindow {
         buttonCancel.setPrefWidth(80);
         label.setWrapText(true);
         label.setTextAlignment(TextAlignment.CENTER);
+        label.setContentDisplay(ContentDisplay.CENTER);
+        label.setAlignment(Pos.CENTER);
         label.setPrefWidth(200);
 
         window.initModality(Modality.APPLICATION_MODAL);
@@ -56,6 +59,7 @@ public class MessageWindow {
         });
     }
     public void show (String title, String message, Type type){
+        buttonCancel.setText("Cancel");
         result = false;
         window.setTitle(title);
         label.setText(message);
