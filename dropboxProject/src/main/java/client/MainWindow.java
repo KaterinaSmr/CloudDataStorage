@@ -18,6 +18,7 @@ import javafx.scene.layout.VBox;
 import javafx.scene.robot.Robot;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
+import javafx.stage.Stage;
 
 import java.awt.*;
 import java.io.File;
@@ -28,7 +29,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainWindow implements ServerCommands {
     @FXML
@@ -72,9 +72,12 @@ public class MainWindow implements ServerCommands {
     private String nodeParentPath;
     private CountDownLatch waitingAllFiles;
     private int countFiles;
+    private Stage loginStage;
+    private boolean isLoggedIn;
 
     public void main() {
         statusExchanger = new Exchanger<>();
+        isLoggedIn = true;
         setupVisualElements();
 
         try {
@@ -83,9 +86,9 @@ public class MainWindow implements ServerCommands {
             e.printStackTrace();
         }
 
-        new Thread(() -> {
+        Thread t1 = new Thread(() -> {
             try {
-                while (true) {
+                while (isLoggedIn) {
                     String header = readHeader(COMMAND_LENGTH);
                     System.out.println("Header: " + header);
                     if (header.startsWith(FILES_TREE)) {
@@ -139,12 +142,17 @@ public class MainWindow implements ServerCommands {
                         Platform.runLater(() -> {
                             messageWindow.show("Info", msg, MessageWindow.Type.INFORMATION);
                         });
+                    } else if (header.startsWith(END) || header.startsWith(LOGOUT)){
+                        break;
                     }
                 }
             } catch (IOException e) {
                 e.printStackTrace();
             }
-        }).start();
+            System.out.println("Thread main END");
+        });
+        t1.setDaemon(true);
+        t1.start();
     }
 
     private String readMessage() throws IOException {
@@ -400,6 +408,7 @@ public class MainWindow implements ServerCommands {
         } else {
             System.out.println("Selected File: " + selectedFile.getAbsolutePath());
         }
+
         new Thread(()->{
             Platform.runLater(()->{
                 progressBox.setVisible(true);
@@ -449,7 +458,6 @@ public class MainWindow implements ServerCommands {
 
             }
         }).start();
-
     }
 
     @FXML
@@ -538,13 +546,24 @@ public class MainWindow implements ServerCommands {
 
     @FXML
     public void onLogoutButton() {
-
+        messageWindow.show("Please confirm", "Are you sure to log out?", MessageWindow.Type.CONFIRMATION);
+        if (isLoggedIn = !messageWindow.getResult()) return;
+        //close this window
+        Stage thisStage = (Stage) logoutButton.getScene().getWindow();
+        thisStage.close();
+        send(LOGOUT);
+        //наверно надо дождаться ответа от сервера о подтверждении логаута
+        loginStage.show();
     }
 
     @FXML
     public void keyboardHandler(KeyEvent ke) {
         if (ke.getCode().equals(KeyCode.DELETE))
             onRemoveButton();
+    }
+
+    public void setLoginStage(Stage stage){
+        loginStage = stage;
     }
 
     public void onExit() {
@@ -612,7 +631,10 @@ public class MainWindow implements ServerCommands {
                             String[] newPath = resp.split(SEPARATOR);
                             File newFile = new File(newPath[1]);
                             changedNode.setFile(newFile);
+                            System.out.println("Folder name name after rename: " + changedNode.getName());
+                            TreeItem<FilesTree> item = treeView.getSelectionModel().getSelectedItem();
                             treeView.refresh();
+                            setSelectedTreeItem(item);
                         } else {
                             System.out.println(resp);
                             messageWindow.show("Rename failed", resp, MessageWindow.Type.INFORMATION);

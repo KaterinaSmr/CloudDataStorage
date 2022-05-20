@@ -57,6 +57,8 @@ public class ClientHandler implements ServerCommands {
                 int fileSize = Integer.parseInt(readMessageInfo());
                 System.out.println("Path: " + path + " | fileName: " + fileName + " | fileSize: " + fileSize);
                 downloadFile(path, fileName, fileSize);
+            } else if (header.startsWith(LOGOUT)) {
+                logoutUser();
             } else if (header.startsWith(END)) {
                 serverChannel.unSubscribeMe(this);
             }
@@ -79,6 +81,13 @@ public class ClientHandler implements ServerCommands {
     private void sendFilesTree() throws IOException{
         rootNode = new FilesTree(mainDirectory);
         outObjStream.writeObject(rootNode);
+    }
+
+    private void logoutUser(){
+        sendInfo(LOGOUTOK);
+        mainDirectory = null;
+        rootNode = null;
+        user = null;
     }
 
     private void createFolder(String parent, String name){

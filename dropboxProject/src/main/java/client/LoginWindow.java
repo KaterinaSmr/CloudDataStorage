@@ -87,6 +87,9 @@ public class LoginWindow implements ServerCommands {
                     Platform.exit();
                 }
             });
+            passwordField.clear();
+            label.setText("");
+            mainWindow.setLoginStage(currentStage);
             currentStage.close();
             mainWindow.main();
         } catch (IOException e) {
