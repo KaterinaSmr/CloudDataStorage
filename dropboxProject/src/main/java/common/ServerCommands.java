@@ -10,6 +10,7 @@ public interface ServerCommands {
     String UPLOAD = "/requpload";
     String END = "/end";
     String LOGOUT = "/reqlogout";
+    String SIGNUP = "/reqsignup";
 
     String AUTHOK ="/authoriok";
     String FILES_TREE = "/filestree";
@@ -23,8 +24,10 @@ public interface ServerCommands {
     String NOK = "NO";
     String INFO = "/infomessg";
     String LOGOUTOK = "/logoutoke";
+    String SIGNUPOK = "/signupoke";
 
     String SEPARATOR = "//";
+    String UNKNOWN = "Unknown error. Please try again later.";
     int COMMAND_LENGTH = 10;
     int DEFAULT_BUFFER = 2048;
 }

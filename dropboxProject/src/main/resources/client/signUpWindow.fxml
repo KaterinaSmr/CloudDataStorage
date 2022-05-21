@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox alignment="CENTER" prefHeight="300.0" prefWidth="340.0" spacing="10.0" xmlns="http://javafx.com/javafx/11.0.2" xmlns:fx="http://javafx.com/fxml/1" fx:controller="client.SignUpWindow">
+   <children>
+      <AnchorPane>
+         <Label text="Login" AnchorPane.bottomAnchor="5.0" AnchorPane.leftAnchor="0.0" />
+         <TextField fx:id="txtLogin" prefHeight="26.0" prefWidth="138.0" styleClass="my-text" AnchorPane.rightAnchor="0.0" />
+      </AnchorPane>
+      <AnchorPane>
+         <Label text="Password" AnchorPane.bottomAnchor="5.0" AnchorPane.leftAnchor="0.0" />
+         <PasswordField fx:id="passwordField" prefHeight="26.0" prefWidth="138.0" styleClass="my-text" AnchorPane.rightAnchor="0.0" />
+      </AnchorPane>
+      <AnchorPane layoutX="60.0" layoutY="153.0">
+         <children>
+            <Label text="Repeat password" AnchorPane.bottomAnchor="5.0" AnchorPane.leftAnchor="0.0" />
+            <PasswordField fx:id="repeatPswField" prefHeight="26.0" prefWidth="138.0" styleClass="my-text" AnchorPane.rightAnchor="0.0" />
+         </children>
+      </AnchorPane>
+      <HBox alignment="CENTER" prefHeight="26.0" prefWidth="160.0" spacing="10.0">
+         <children>
+            <Button fx:id="btnSignUp" alignment="CENTER" defaultButton="true" mnemonicParsing="false" onAction="#onSignUp" prefHeight="26.0" prefWidth="80.0" text="Sign Up" />
+            <Button fx:id="btnCancel" alignment="CENTER" layoutX="10.0" layoutY="10.0" mnemonicParsing="false" onAction="#onCancel" prefHeight="26.0" prefWidth="80.0" text="Cancel" />
+         </children>
+      </HBox>
+      <Label fx:id="label" />
+   </children>
+   <padding>
+      <Insets left="50.0" right="50.0" top="40.0" />
+   </padding>
+</VBox>

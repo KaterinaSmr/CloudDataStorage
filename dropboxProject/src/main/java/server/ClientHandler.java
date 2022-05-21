@@ -1,5 +1,6 @@
 package server;
 
+import common.AuthService;
 import common.FilesTree;
 import common.MyObjectOutputStream;
 import common.ServerCommands;
@@ -7,19 +8,22 @@ import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
+import java.sql.SQLException;
 
 public class ClientHandler implements ServerCommands {
     private Server serverChannel;
     private SocketChannel socketChannel;
+    private AuthService authService;
     private User user;
     private MyObjectOutputStream outObjStream;
     private File mainDirectory;
     private FilesTree rootNode;
 
-    public ClientHandler(Server serverChannel, SocketChannel socketChannel)  throws IOException {
+    public ClientHandler(Server serverChannel, SocketChannel socketChannel, AuthService authService)  throws IOException {
             this.serverChannel = serverChannel;
             this.socketChannel = socketChannel;
             this.outObjStream = new MyObjectOutputStream(socketChannel);
+            this.authService =  authService;
     }
     public void read(){
 //        ByteBuffer buffer = ByteBuffer.allocate(256);
@@ -31,9 +35,9 @@ public class ClientHandler implements ServerCommands {
                 user = serverChannel.authorizeMe(msg.split(SEPARATOR)[0], msg.split(SEPARATOR)[1]);
                 if (user != null) {
                     System.out.println("login ok " + user.getId());
-                    sendInfo(AUTHOK + SEPARATOR + user.getId());
+                    sendMessage(AUTHOK + SEPARATOR + user.getId());
                     mainDirectory = user.getPath().toFile();
-                } else sendInfo("Wrong login/password");
+                } else sendMessage("Wrong login/password");
             } else if (header.startsWith(GETFILELIST)) {
                 sendFilesTree();
             } else if (header.startsWith(RENAME)) {
@@ -49,7 +53,7 @@ public class ClientHandler implements ServerCommands {
                 String[] strings = readMessage().split(SEPARATOR);
                 int filesQty = countFiles(strings[0]);
                 System.out.println("qty of files to send: " + filesQty);
-                sendInfo(DOWNLCOUNT + filesQty + SEPARATOR);
+                sendMessage(DOWNLCOUNT + filesQty + SEPARATOR);
                 sendFiles(strings[0]);
             } else if (header.startsWith(UPLOAD)) {
                 String path = readMessageInfo();
@@ -59,6 +63,11 @@ public class ClientHandler implements ServerCommands {
                 downloadFile(path, fileName, fileSize);
             } else if (header.startsWith(LOGOUT)) {
                 logoutUser();
+            } else if(header.startsWith(SIGNUP)){
+                String[] strings = readMessage().split(SEPARATOR);
+                String login = strings[0];
+                String pass = strings[1];
+                registerNewUser(login,pass);
             } else if (header.startsWith(END)) {
                 serverChannel.unSubscribeMe(this);
             }
@@ -67,7 +76,28 @@ public class ClientHandler implements ServerCommands {
         }
     }
 
-    public void sendInfo(String s) {
+    private void registerNewUser(String login, String pass) {
+        try {
+            if (authService.loginIsBusy(login)) {
+                sendMessage("Login " + login + " is already taken.");
+                return;
+            }
+            String path = authService.registerNewUser(login, pass);
+            if (path == null){
+                sendMessage(UNKNOWN);
+                return;
+            }
+            File rootDirectory = new File(path);
+            if (rootDirectory.mkdirs())
+                sendMessage(SIGNUPOK);
+            else sendMessage(UNKNOWN);
+        } catch (SQLException e) {
+            e.printStackTrace();
+            sendMessage(UNKNOWN);
+        }
+    }
+
+    public void sendMessage(String s) {
         ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
         buffer.rewind();
         try {
@@ -84,7 +114,7 @@ public class ClientHandler implements ServerCommands {
     }
 
     private void logoutUser(){
-        sendInfo(LOGOUTOK);
+        sendMessage(LOGOUTOK);
         mainDirectory = null;
         rootNode = null;
         user = null;
@@ -97,13 +127,13 @@ public class ClientHandler implements ServerCommands {
             File newFolder = new File(parentTree.getFile().getAbsolutePath() + "/" + name);
             if (rootNode.validateFile(newFolder.getAbsolutePath()) == null) {
                 if (newFolder.mkdir()) {
-                    sendInfo(NEWFOLDSTATUS + OK + SEPARATOR + newFolder.getAbsolutePath());
+                    sendMessage(NEWFOLDSTATUS + OK + SEPARATOR + newFolder.getAbsolutePath());
                 }
             } else {
-                sendInfo(NEWFOLDSTATUS + "File with name " + name + " already exist in directory " + parentTree.getName());
+                sendMessage(NEWFOLDSTATUS + "File with name " + name + " already exist in directory " + parentTree.getName());
             }
         } else {
-            sendInfo(NEWFOLDSTATUS + "Operation failed. Please try again later");
+            sendMessage(NEWFOLDSTATUS + "Operation failed. Please try again later");
         }
     }
 
@@ -111,7 +141,7 @@ public class ClientHandler implements ServerCommands {
         rootNode = new FilesTree(mainDirectory);
         FilesTree node2Send = rootNode.validateFile(path);
         if (node2Send == null) {
-            sendInfo(DOWNLSTATUS + NOK + "File " + path + " not found");
+            sendMessage(DOWNLSTATUS + NOK + "File " + path + " not found");
             return;
         }
         if (node2Send.isDirectory()){
@@ -128,7 +158,7 @@ public class ClientHandler implements ServerCommands {
             FileInputStream fis = new FileInputStream(file);
             FileChannel fc = fis.getChannel();
             ByteBuffer bufferOut = ByteBuffer.allocate((int) file.length());
-            sendInfo(DOWNLSTATUS + SEPARATOR + OK + file.length() + SEPARATOR + file.getAbsolutePath() + SEPARATOR);
+            sendMessage(DOWNLSTATUS + SEPARATOR + OK + file.length() + SEPARATOR + file.getAbsolutePath() + SEPARATOR);
             while (fc.read(bufferOut) > 0 || bufferOut.position() > 0) {
                 bufferOut.flip();
                 socketChannel.write(bufferOut);
@@ -136,7 +166,7 @@ public class ClientHandler implements ServerCommands {
             }
             return;
         } catch (IOException e) {
-            sendInfo(DOWNLSTATUS + SEPARATOR + NOK + "Unknown error. File " + file.getName() + " cannot be downloaded. Please try again later.");
+            sendMessage(DOWNLSTATUS + SEPARATOR + NOK + "File " + file.getName() + " cannot be downloaded. " + UNKNOWN);
         }
     }
 
@@ -144,7 +174,7 @@ public class ClientHandler implements ServerCommands {
         rootNode = new FilesTree(mainDirectory);
         FilesTree parent = rootNode.validateFile(path);
         if (parent == null) {
-            sendInfo(UPLOADSTAT + SEPARATOR + NOK + SEPARATOR + "Upload failed. Parent directory not found on server. Please refresh and try again");
+            sendMessage(UPLOADSTAT + SEPARATOR + NOK + SEPARATOR + "Upload failed. Parent directory not found on server. Please refresh and try again");
             return;
         }
         String newFilePath = path + "/" + name;
@@ -182,11 +212,11 @@ public class ClientHandler implements ServerCommands {
                 System.out.println("Length " + n);
             }
             System.out.println("File with " + n + " bytes downloaded");
-            sendInfo(UPLOADSTAT + SEPARATOR + OK);
+            sendMessage(UPLOADSTAT + SEPARATOR + OK);
             out.close();
         } catch (IOException e) {
             e.printStackTrace();
-            sendInfo(UPLOADSTAT + SEPARATOR + NOK + SEPARATOR + "Upload failed. Please try again later.");
+            sendMessage(UPLOADSTAT + SEPARATOR + NOK + SEPARATOR + "Upload failed. Please try again later.");
         }
     }
 
@@ -209,17 +239,17 @@ public class ClientHandler implements ServerCommands {
             File file2rename = node2Change.getFile();
             String newPath = path.substring(0, path.length() - file2rename.getName().length()) + newName;
             if (rootNode.validateFile(newPath) != null) {
-                sendInfo(RENAMSTATUS + "File " + newName + " already exist");
+                sendMessage(RENAMSTATUS + "File " + newName + " already exist");
                 return;
             }
             File newFile = new File(newPath);
             if (file2rename.renameTo(newFile)) {
                 node2Change.setFile(newFile);
-                sendInfo(RENAMSTATUS + OK + SEPARATOR + newFile.getAbsolutePath());
+                sendMessage(RENAMSTATUS + OK + SEPARATOR + newFile.getAbsolutePath());
                 return;
             }
         }
-        sendInfo(RENAMSTATUS + "Renaming failed. Please try again later");
+        sendMessage(RENAMSTATUS + "Renaming failed. Please try again later");
     }
 
     private void remove(String path){
@@ -230,12 +260,12 @@ public class ClientHandler implements ServerCommands {
             boolean remFile = removeDir(file2Remove);
             boolean remTree = rootNode.removeChild(node2Remove);
             if (remFile && remTree) {
-                sendInfo(REMSTATUS + OK);
+                sendMessage(REMSTATUS + OK);
                 return;
             } else
-                sendInfo(REMSTATUS + "Remove failed. Please try again later");
+                sendMessage(REMSTATUS + "Remove failed. Please try again later");
         } else {
-            sendInfo(REMSTATUS  + "File not found on server");
+            sendMessage(REMSTATUS  + "File not found on server");
         }
     }
 

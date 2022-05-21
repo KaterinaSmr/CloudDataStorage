@@ -47,7 +47,7 @@ public class Server {
                             System.out.println("Клиент подключился");
                             clientChannel.configureBlocking(false);
                             clientChannel.register(selector, SelectionKey.OP_READ);
-                            clients.add(new ClientHandler(this, clientChannel));
+                            clients.add(new ClientHandler(this, clientChannel, authService));
                         }
                     } else if (key.isReadable()){
                         SocketChannel temp = (SocketChannel) key.channel();
@@ -75,6 +75,7 @@ public class Server {
         }
         return null;
     }
+
     public void unSubscribeMe(ClientHandler c){
         clients.remove(c);
         c.close();
@@ -82,6 +83,10 @@ public class Server {
     private void connectToDB() throws Exception {
         Class.forName("org.sqlite.JDBC");
         connection = DriverManager.getConnection("jdbc:sqlite:src/main/resources/server/clientData.db");
+    }
+
+    public AuthService getAuthService(){
+        return authService;
     }
 
     private void end(){

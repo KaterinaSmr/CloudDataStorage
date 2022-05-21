@@ -25,6 +25,8 @@ public class LoginWindow implements ServerCommands {
     @FXML
     Button btnLogin;
     @FXML
+    Button btnSignUp;
+    @FXML
     Label label;
     private SocketChannel socketChannel;
     private final String ADDR = "localhost";
@@ -47,6 +49,39 @@ public class LoginWindow implements ServerCommands {
             } else {
                 label.setText(s);
             }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @FXML
+    public void onSignUp(){
+        try {
+            FXMLLoader fxmlLoader = new FXMLLoader(this.getClass().getResource("signUpWindow.fxml"));
+            Scene signUpScene = new Scene(fxmlLoader.load(), 340,300);
+            SignUpWindow signUpWindow = fxmlLoader.getController();
+            signUpWindow.setSocketChannel(socketChannel);
+
+            Stage signUpStage = new Stage();
+            signUpStage.setScene(signUpScene);
+            signUpStage.setTitle("Sign up");
+            signUpStage.show();
+            Stage currentStage = (Stage)btnLogin.getScene().getWindow();
+
+            signUpStage.setOnCloseRequest(windowEvent -> {
+                try {
+                    System.out.println("Stage is closing");
+                    signUpWindow.onExit();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    Platform.exit();
+                }
+            });
+            passwordField.clear();
+            label.setText("");
+            signUpWindow.setLoginStage(currentStage);
+            currentStage.close();
         } catch (IOException e) {
             e.printStackTrace();
         }

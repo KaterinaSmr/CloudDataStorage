@@ -14,8 +14,12 @@
          <Label text="Password" AnchorPane.bottomAnchor="5.0" AnchorPane.leftAnchor="0.0" />
          <PasswordField fx:id="passwordField" prefHeight="26.0" prefWidth="138.0" styleClass="my-text" AnchorPane.rightAnchor="0.0" />
       </AnchorPane>
-
-      <Button fx:id="btnLogin" alignment="CENTER" defaultButton="true" mnemonicParsing="false" onAction="#onLogin" prefHeight="26.0" prefWidth="80.0" text="Login" />
+      <HBox alignment="CENTER" prefHeight="26.0" prefWidth="160.0" spacing="10.0">
+         <children>
+            <Button fx:id="btnLogin" alignment="CENTER" defaultButton="true" mnemonicParsing="false" onAction="#onLogin" prefHeight="26.0" prefWidth="95.0" text="Login" />
+            <Button fx:id="btnSignUp" alignment="CENTER" layoutX="10.0" layoutY="10.0" mnemonicParsing="false" onAction="#onSignUp" prefHeight="26.0" prefWidth="95.0" text="SignUp" />
+         </children>
+      </HBox>
       <Label fx:id="label" />
    </children>
    <padding>
