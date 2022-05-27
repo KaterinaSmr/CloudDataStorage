@@ -59,7 +59,7 @@ public class SignUpWindow implements ServerCommands {
             System.out.println("ответ:  " + s);
             if (s.startsWith(SIGNUPOK)){
                 Platform.runLater(()->{
-                    messageWindow.show("Congratulations!", "Registration is finished", MessageWindow.Type.INFORMATION);
+                    messageWindow.show("Congratulations!", "Registration is finished. \n You may now sign in.", MessageWindow.Type.INFORMATION);
                 });
                 txtLogin.clear();
                 passwordField.clear();

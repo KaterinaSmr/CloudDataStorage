@@ -29,7 +29,7 @@ public class ClientHandler implements ServerCommands {
 //        ByteBuffer buffer = ByteBuffer.allocate(256);
         try {
             String header = readHeader(COMMAND_LENGTH + SEPARATOR.length());
-            System.out.print("Echo: " + header);
+            System.out.println("Echo: " + header);
             if (header.startsWith(AUTH)) {
                 String msg = readMessage();
                 user = serverChannel.authorizeMe(msg.split(SEPARATOR)[0], msg.split(SEPARATOR)[1]);
@@ -109,7 +109,7 @@ public class ClientHandler implements ServerCommands {
     }
 
     private void sendFilesTree() throws IOException{
-        rootNode = new FilesTree(mainDirectory);
+        rootNode = new FilesTree(mainDirectory, user.getLogin());
         outObjStream.writeObject(rootNode);
     }
 
@@ -121,7 +121,7 @@ public class ClientHandler implements ServerCommands {
     }
 
     private void createFolder(String parent, String name){
-        rootNode = new FilesTree(mainDirectory);
+        rootNode = new FilesTree(mainDirectory, user.getLogin());
         FilesTree parentTree = rootNode.validateFile(parent);
         if (parentTree != null) {
             File newFolder = new File(parentTree.getFile().getAbsolutePath() + "/" + name);
@@ -138,7 +138,7 @@ public class ClientHandler implements ServerCommands {
     }
 
     private void sendFiles(String path){
-        rootNode = new FilesTree(mainDirectory);
+        rootNode = new FilesTree(mainDirectory, user.getLogin());
         FilesTree node2Send = rootNode.validateFile(path);
         if (node2Send == null) {
             sendMessage(DOWNLSTATUS + NOK + "File " + path + " not found");
@@ -171,7 +171,7 @@ public class ClientHandler implements ServerCommands {
     }
 
     private void downloadFile(String path, String name, int size){
-        rootNode = new FilesTree(mainDirectory);
+        rootNode = new FilesTree(mainDirectory, user.getLogin());
         FilesTree parent = rootNode.validateFile(path);
         if (parent == null) {
             sendMessage(UPLOADSTAT + SEPARATOR + NOK + SEPARATOR + "Upload failed. Parent directory not found on server. Please refresh and try again");
@@ -221,7 +221,7 @@ public class ClientHandler implements ServerCommands {
     }
 
     private int countFiles(String path){
-        rootNode = new FilesTree(mainDirectory);
+        rootNode = new FilesTree(mainDirectory, user.getLogin());
         FilesTree node = rootNode.validateFile(path);
         if (node == null) return 0;
         if (!node.isDirectory()) return 1;
@@ -233,7 +233,7 @@ public class ClientHandler implements ServerCommands {
     }
 
     private void rename(String path, String newName){
-        rootNode = new FilesTree(mainDirectory);
+        rootNode = new FilesTree(mainDirectory, user.getLogin());
         FilesTree node2Change = rootNode.validateFile(path);
         if (node2Change != null) {
             File file2rename = node2Change.getFile();
@@ -253,7 +253,7 @@ public class ClientHandler implements ServerCommands {
     }
 
     private void remove(String path){
-        rootNode = new FilesTree(mainDirectory);
+        rootNode = new FilesTree(mainDirectory, user.getLogin());
         FilesTree node2Remove = rootNode.validateFile(path);
         if (node2Remove != null){
             File file2Remove = node2Remove.getFile();

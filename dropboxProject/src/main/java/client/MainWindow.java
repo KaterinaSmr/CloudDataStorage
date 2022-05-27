@@ -36,13 +36,17 @@ public class MainWindow implements ServerCommands {
     @FXML
     public TableView<FilesTree> tableView;
     @FXML
-    private TableColumn<FilesTree, String> columnName;
+    private TableColumn columnName;
     @FXML
     private TableColumn<FilesTree, String> columnType;
     @FXML
     private TableColumn<FilesTree, Long> columnSize;
     @FXML
     private TableColumn<FilesTree, String> columnTime;
+    @FXML
+    private TableColumn<FilesTree, ImageView> subColumnIcon;
+    @FXML
+    private TableColumn<FilesTree, String> subColumnName;
     @FXML
     private Button downloadButton;
     @FXML
@@ -63,6 +67,7 @@ public class MainWindow implements ServerCommands {
     private ImageView progressImageView;
 
     private Image iconFolder;
+    private Image iconFile;
     private SocketChannel socketChannel;
     private MyObjectInputStream inObjStream;
     private FilesTree filesTree = null;
@@ -93,13 +98,13 @@ public class MainWindow implements ServerCommands {
                     System.out.println("Header: " + header);
                     if (header.startsWith(FILES_TREE)) {
                         int objectSize = Integer.parseInt(readMessageInfo());
-                        System.out.println("Object size " + objectSize);
                         try {
                             filesTree = (FilesTree) inObjStream.readObject(objectSize);
                         } catch (ClassNotFoundException e) {
                             e.printStackTrace();
                         }
                         Platform.runLater(() -> {
+                            setupTableView1();
                             refreshFilesTreeAndTable(filesTree);
                         });
                     } else if (header.startsWith(RENAMSTATUS) || header.startsWith(REMSTATUS) || header.startsWith(NEWFOLDSTATUS)) {
@@ -437,7 +442,7 @@ public class MainWindow implements ServerCommands {
                 //обновить filesTree -> TreeView -> TableView
                 String newFilePath = parent.getFile().getAbsolutePath() + "/" + selectedFile.getName();
                 File newFile = new File(newFilePath);
-                FilesTree newNode = new FilesTree(newFile, false);
+                FilesTree newNode = new FilesTree(newFile, false, iconFile);
                 parent.addChild(newNode);
                 treeView.refresh();
                 setSelectedTreeItem(currentTreeItem);
@@ -528,7 +533,7 @@ public class MainWindow implements ServerCommands {
             if (resp.startsWith(OK)) {
                 String[] newPath = resp.split(SEPARATOR);
                 File newFile = new File(newPath[1]);
-                FilesTree newNode = new FilesTree(newFile, true);
+                FilesTree newNode = new FilesTree(newFile, true, iconFolder);
                 parent.addChild(newNode);
                 TreeItem<FilesTree> newTreeItem = new TreeItem<>(newNode, new ImageView(iconFolder));
                 treeView.getSelectionModel().getSelectedItem().getChildren().add(newTreeItem);
@@ -541,7 +546,6 @@ public class MainWindow implements ServerCommands {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-
     }
 
     @FXML
@@ -576,38 +580,33 @@ public class MainWindow implements ServerCommands {
         System.out.println("Main Window is closing");
     }
 
-    public void setupVisualElements() {
-        progressBox.setVisible(false);
-        messageWindow = new MessageWindow();
-        iconFolder = new Image(getClass().getResourceAsStream("folder_icon.png"), 20, 20, true, false);
-        Image iconDownload = new Image(getClass().getResourceAsStream("download_icon.png"), 48, 48, true, false);
-        downloadButton.setGraphic(new ImageView(iconDownload));
-        Image iconUpload = new Image(getClass().getResourceAsStream("upload_icon.png"), 48, 48, true, false);
-        uploadButton.setGraphic(new ImageView(iconUpload));
-        Image iconAddFolder = new Image(getClass().getResourceAsStream("addFolder_icon.png"), 48, 48, true, false);
-        addFolderButton.setGraphic(new ImageView(iconAddFolder));
-        Image iconLogout = new Image(getClass().getResourceAsStream("logout_icon.png"), 48, 48, true, false);
-        logoutButton.setGraphic(new ImageView(iconLogout));
-        Image iconRefresh = new Image(getClass().getResourceAsStream("refresh_icon.png"), 48, 48, true, false);
-        refreshButton.setGraphic(new ImageView(iconRefresh));
-        Image iconRemove = new Image(getClass().getResourceAsStream("remove_icon.png"), 48, 48, true, false);
-        removeButton.setGraphic(new ImageView(iconRemove));
-        Image iconRename = new Image(getClass().getResourceAsStream("rename_icon.png"), 48, 48, true, false);
-        renameButton.setGraphic(new ImageView(iconRename));
+    private void setIcons(FilesTree f){
+        if (!f.isDirectory()){
+            f.setIcon(new ImageView(iconFile));
+        } else {
+            f.setIcon(new ImageView(iconFolder));
+            for (FilesTree ft:f.getChildren()) {
+                setIcons(ft);
+            }
+        }
+    }
 
+     private void setupTableView1(){
+        setIcons(filesTree);
+        subColumnIcon.setCellValueFactory(new PropertyValueFactory ("icon"));
+        subColumnIcon.setStyle("-fx-pref-height: 0;");
 
-        columnName.setCellValueFactory(new PropertyValueFactory<>("name"));
+        subColumnName.setCellValueFactory(new PropertyValueFactory<>("displayName"));
+        subColumnName.setStyle("-fx-pref-height: 0;");
         columnType.setCellValueFactory(new PropertyValueFactory<>("type"));
         columnSize.setCellValueFactory(new PropertyValueFactory<>("size"));
         columnTime.setCellValueFactory(new PropertyValueFactory<>("timestamp"));
+
         tableView.getSortOrder().add(columnType);
-        columnName.setCellFactory(TextFieldTableCell.<FilesTree>forTableColumn());
+        subColumnName.setCellFactory(TextFieldTableCell.<FilesTree>forTableColumn());
+        tableView.setStyle( "-fx-control-inner-background-alt: -fx-control-inner-background; -fx-table-cell-border-color: transparent;");
 
-        Image progressGif = new Image(getClass().getResourceAsStream("spinner.gif"), 60, 60, true, false);
-        progressImageView.setImage(progressGif);
-
-
-        columnName.setOnEditCommit(
+        subColumnName.setOnEditCommit(
                 (EventHandler<TableColumn.CellEditEvent<FilesTree, String>>) t -> {
                     System.out.println("On edit commit called");
                     FilesTree changedNode = ((FilesTree) t.getTableView().getItems().get(t.getTablePosition().getRow()));
@@ -631,10 +630,13 @@ public class MainWindow implements ServerCommands {
                             String[] newPath = resp.split(SEPARATOR);
                             File newFile = new File(newPath[1]);
                             changedNode.setFile(newFile);
-                            System.out.println("Folder name name after rename: " + changedNode.getName());
-                            TreeItem<FilesTree> item = treeView.getSelectionModel().getSelectedItem();
+                            System.out.println("File name after rename: File: " + changedNode.getFile().getName() + " getName: "
+                                    +changedNode.getName() + " name field: " + changedNode.getNameName() + " getDisplayName(): "
+                                    +changedNode.getDisplayName());
                             treeView.refresh();
-                            setSelectedTreeItem(item);
+                            tableView.refresh();
+//                            TreeItem<FilesTree> item = treeView.getSelectionModel().getSelectedItem();
+//                            setSelectedTreeItem(item);
                         } else {
                             System.out.println(resp);
                             messageWindow.show("Rename failed", resp, MessageWindow.Type.INFORMATION);
@@ -648,8 +650,8 @@ public class MainWindow implements ServerCommands {
                 }
         );
 
-        //тут мы делаем так, чтобы при двойном клике на папке в табличной части автоматически выделялся
-        // соответствующий узел дерева каталогов и мы проваливались в эту папку
+//        тут мы делаем так, чтобы при двойном клике на папке в табличной части автоматически выделялся
+//         соответствующий узел дерева каталогов и мы проваливались в эту папку
         tableView.setRowFactory(tv -> {
             TableRow<FilesTree> row = new TableRow<>();
             row.setOnMouseClicked(event -> {
@@ -662,6 +664,30 @@ public class MainWindow implements ServerCommands {
             });
             return row;
         });
+    }
+
+    public void setupVisualElements() {
+        progressBox.setVisible(false);
+        messageWindow = new MessageWindow();
+        iconFolder = new Image(getClass().getResourceAsStream("folder_icon.png"), 18, 18, true, false);
+        iconFile = new Image(getClass().getResourceAsStream("file_icon.png"), 18, 18, true, false);
+        Image iconDownload = new Image(getClass().getResourceAsStream("download_icon.png"), 48, 48, true, false);
+        downloadButton.setGraphic(new ImageView(iconDownload));
+        Image iconUpload = new Image(getClass().getResourceAsStream("upload_icon.png"), 48, 48, true, false);
+        uploadButton.setGraphic(new ImageView(iconUpload));
+        Image iconAddFolder = new Image(getClass().getResourceAsStream("addFolder_icon.png"), 48, 48, true, false);
+        addFolderButton.setGraphic(new ImageView(iconAddFolder));
+        Image iconLogout = new Image(getClass().getResourceAsStream("logout_icon.png"), 48, 48, true, false);
+        logoutButton.setGraphic(new ImageView(iconLogout));
+        Image iconRefresh = new Image(getClass().getResourceAsStream("refresh_icon.png"), 48, 48, true, false);
+        refreshButton.setGraphic(new ImageView(iconRefresh));
+        Image iconRemove = new Image(getClass().getResourceAsStream("remove_icon.png"), 48, 48, true, false);
+        removeButton.setGraphic(new ImageView(iconRemove));
+        Image iconRename = new Image(getClass().getResourceAsStream("rename_icon.png"), 48, 48, true, false);
+        renameButton.setGraphic(new ImageView(iconRename));
+
+        Image progressGif = new Image(getClass().getResourceAsStream("spinner.gif"), 60, 60, true, false);
+        progressImageView.setImage(progressGif);
     }
 
 }
