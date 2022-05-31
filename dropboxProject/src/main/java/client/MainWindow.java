@@ -71,6 +71,7 @@ public class MainWindow implements ServerCommands {
     private SocketChannel socketChannel;
     private MyObjectInputStream inObjStream;
     private FilesTree filesTree = null;
+    private FilesTree tempNode = null;
     private Exchanger<String> statusExchanger;
     private MessageWindow messageWindow;
     private String downloadPath = "D:/Downloads/";
@@ -97,17 +98,38 @@ public class MainWindow implements ServerCommands {
                     String header = readHeader(COMMAND_LENGTH);
                     System.out.println("Header: " + header);
                     if (header.startsWith(FILES_TREE)) {
-                        int objectSize = Integer.parseInt(readMessageInfo());
+                        int objectSize = Integer.parseInt(readInfo());
                         try {
                             filesTree = (FilesTree) inObjStream.readObject(objectSize);
+                            setIcons(filesTree);
                         } catch (ClassNotFoundException e) {
                             e.printStackTrace();
                         }
                         Platform.runLater(() -> {
-                            setupTableView1();
                             refreshFilesTreeAndTable(filesTree);
                         });
-                    } else if (header.startsWith(RENAMSTATUS) || header.startsWith(REMSTATUS) || header.startsWith(NEWFOLDSTATUS)) {
+                    } else if (header.startsWith(RENAMSTATUS)) {
+                        String status = readInfo();
+                        if (status.startsWith(OK)) {
+                            int objectSize = Integer.parseInt(readInfo());
+                            try {
+                                tempNode = (FilesTree) inObjStream.readObject(objectSize);
+                                setIcons(tempNode);
+                            } catch (ClassNotFoundException e) {
+                                e.printStackTrace();
+                            }
+                        } else {
+                            String msg = readMessage();
+                            Platform.runLater(()->{
+                                messageWindow.show("Error", msg, MessageWindow.Type.INFORMATION);
+                            });
+                        }
+                        try {
+                            statusExchanger.exchange(status);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    } else if (header.startsWith(REMSTATUS) || header.startsWith(NEWFOLDSTATUS)) {
                         String msg = readMessage();
                         try {
                             statusExchanger.exchange(msg);
@@ -116,16 +138,16 @@ public class MainWindow implements ServerCommands {
                         }
                     } else if (header.startsWith(DOWNLCOUNT)) {
                         try {
-                            statusExchanger.exchange(readMessageInfo());
+                            statusExchanger.exchange(readInfo());
                         } catch (InterruptedException e) {
                             e.printStackTrace();
                         }
                     } else if (header.startsWith(DOWNLSTATUS)) {
                         String status = header.split(SEPARATOR)[1];
                         if (status.startsWith(OK)) {
-                            String str = readMessageInfo();
+                            String str = readInfo();
                             int fileLength = Integer.parseInt(str);
-                            String serverPath = readMessageInfo();
+                            String serverPath = readInfo();
                             String path = downloadPath + serverPath.substring(nodeParentPath.length() + 1);
                             readFile(fileLength, path);
                         } else {
@@ -137,7 +159,7 @@ public class MainWindow implements ServerCommands {
                         }
                     } else if (header.startsWith(UPLOADSTAT)) {
                         try {
-                            statusExchanger.exchange(readMessageInfo());
+                            statusExchanger.exchange(readInfo());
                         } catch (InterruptedException e) {
                             e.printStackTrace();
                         }
@@ -158,6 +180,17 @@ public class MainWindow implements ServerCommands {
         });
         t1.setDaemon(true);
         t1.start();
+    }
+
+    private void send(String s) {
+        ByteBuffer buffer = null;
+        try {
+            buffer = ByteBuffer.wrap(s.getBytes());
+            socketChannel.write(buffer);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        buffer.clear();
     }
 
     private String readMessage() throws IOException {
@@ -182,7 +215,7 @@ public class MainWindow implements ServerCommands {
         return s;
     }
 
-    private String readMessageInfo() {
+    private String readInfo() {
         String str = "";
         try {
             while (!str.endsWith(SEPARATOR)) {
@@ -242,7 +275,7 @@ public class MainWindow implements ServerCommands {
         inObjStream = new MyObjectInputStream(socketChannel);
     }
 
-    public void refreshFilesTreeAndTable(FilesTree rootNode) {
+    private void refreshFilesTreeAndTable(FilesTree rootNode) {
         tableView.getItems().clear();
         System.out.println("refresh");
         TreeItem<FilesTree> rootItem = buildTreeView(rootNode);
@@ -296,30 +329,18 @@ public class MainWindow implements ServerCommands {
     }
 
     private void removeItem(FilesTree nodeToRemove) {
-        // удалить файл из FilesTree
         String parent = nodeToRemove.getFile().getParent();
         filesTree.removeChild(nodeToRemove);
-        //удалить из дерева
         TreeItem itemToRemove = getTreeItemByValue(treeView.getRoot(), nodeToRemove);
         if (itemToRemove != null) {
             itemToRemove.getParent().getChildren().remove(itemToRemove);
             treeView.refresh();
         }
-        //удалить из таблицы
         tableView.getItems().removeAll();
         selectItem();
     }
 
-    private void send(String s) {
-        ByteBuffer buffer = null;
-        try {
-            buffer = ByteBuffer.wrap(s.getBytes());
-            socketChannel.write(buffer);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        buffer.clear();
-    }
+
 
     @FXML
     public void selectItem() {
@@ -439,7 +460,6 @@ public class MainWindow implements ServerCommands {
                     messageWindow.show("Error", strings[1], MessageWindow.Type.INFORMATION);
                     return;
                 }
-                //обновить filesTree -> TreeView -> TableView
                 String newFilePath = parent.getFile().getAbsolutePath() + "/" + selectedFile.getName();
                 File newFile = new File(newFilePath);
                 FilesTree newNode = new FilesTree(newFile, false, iconFile);
@@ -460,7 +480,6 @@ public class MainWindow implements ServerCommands {
                     progressBox.setVisible(false);
                     messageWindow.show("Info", status, MessageWindow.Type.INFORMATION);
                 });
-
             }
         }).start();
     }
@@ -591,8 +610,29 @@ public class MainWindow implements ServerCommands {
         }
     }
 
-     private void setupTableView1(){
-        setIcons(filesTree);
+    public void setupVisualElements() {
+        progressBox.setVisible(false);
+        messageWindow = new MessageWindow();
+        iconFolder = new Image(getClass().getResourceAsStream("folder_icon.png"), 18, 18, true, false);
+        iconFile = new Image(getClass().getResourceAsStream("file_icon.png"), 18, 18, true, false);
+        Image iconDownload = new Image(getClass().getResourceAsStream("download_icon.png"), 48, 48, true, false);
+        downloadButton.setGraphic(new ImageView(iconDownload));
+        Image iconUpload = new Image(getClass().getResourceAsStream("upload_icon.png"), 48, 48, true, false);
+        uploadButton.setGraphic(new ImageView(iconUpload));
+        Image iconAddFolder = new Image(getClass().getResourceAsStream("addFolder_icon.png"), 48, 48, true, false);
+        addFolderButton.setGraphic(new ImageView(iconAddFolder));
+        Image iconLogout = new Image(getClass().getResourceAsStream("logout_icon.png"), 48, 48, true, false);
+        logoutButton.setGraphic(new ImageView(iconLogout));
+        Image iconRefresh = new Image(getClass().getResourceAsStream("refresh_icon.png"), 48, 48, true, false);
+        refreshButton.setGraphic(new ImageView(iconRefresh));
+        Image iconRemove = new Image(getClass().getResourceAsStream("remove_icon.png"), 48, 48, true, false);
+        removeButton.setGraphic(new ImageView(iconRemove));
+        Image iconRename = new Image(getClass().getResourceAsStream("rename_icon.png"), 48, 48, true, false);
+        renameButton.setGraphic(new ImageView(iconRename));
+
+        Image progressGif = new Image(getClass().getResourceAsStream("spinner.gif"), 60, 60, true, false);
+        progressImageView.setImage(progressGif);
+
         subColumnIcon.setCellValueFactory(new PropertyValueFactory ("icon"));
         subColumnIcon.setStyle("-fx-pref-height: 0;");
 
@@ -609,34 +649,31 @@ public class MainWindow implements ServerCommands {
         subColumnName.setOnEditCommit(
                 (EventHandler<TableColumn.CellEditEvent<FilesTree, String>>) t -> {
                     System.out.println("On edit commit called");
-                    FilesTree changedNode = ((FilesTree) t.getTableView().getItems().get(t.getTablePosition().getRow()));
+                    FilesTree parentNode = treeView.getSelectionModel().getSelectedItem().getValue();
+                    FilesTree changedNode = t.getTableView().getItems().get(t.getTablePosition().getRow());
                     String s = t.getNewValue();
 
                     if (changedNode.equals(filesTree)) {
                         messageWindow.show("Rename failed", "Cannot rename root folder", MessageWindow.Type.INFORMATION);
                         return;
                     }
-                    if (s.equals(changedNode.getName())) {
-                        System.out.println("Name is the same");
-                        messageWindow.show("Rename failed", "New name is the same", MessageWindow.Type.INFORMATION);
-                        return;
-                    }
+                    if (s.equals(changedNode.getName())) {return;}
                     requestRename(changedNode.getFile().getAbsolutePath(), s);
                     String resp = "";
                     try {
                         resp = statusExchanger.exchange("ok");
                         System.out.println("thread Main got msg: " + resp);
                         if (resp.startsWith(OK)) {
-                            String[] newPath = resp.split(SEPARATOR);
-                            File newFile = new File(newPath[1]);
-                            changedNode.setFile(newFile);
-                            System.out.println("File name after rename: File: " + changedNode.getFile().getName() + " getName: "
-                                    +changedNode.getName() + " name field: " + changedNode.getNameName() + " getDisplayName(): "
-                                    +changedNode.getDisplayName());
+                            TreeItem<FilesTree> item = getTreeItemByValue(treeView.getRoot(), changedNode);
+                            TreeItem<FilesTree> parentItem = treeView.getSelectionModel().getSelectedItem();
+                            parentNode.getChildren().remove(changedNode);
+                            FilesTree newNode = tempNode;
+                            parentNode.getChildren().add(newNode);
+
+                            parentItem.getChildren().remove(item);
+                            parentItem.getChildren().add(buildTreeView(newNode));
                             treeView.refresh();
-                            tableView.refresh();
-//                            TreeItem<FilesTree> item = treeView.getSelectionModel().getSelectedItem();
-//                            setSelectedTreeItem(item);
+                            setSelectedTreeItem(parentItem);
                         } else {
                             System.out.println(resp);
                             messageWindow.show("Rename failed", resp, MessageWindow.Type.INFORMATION);
@@ -664,30 +701,6 @@ public class MainWindow implements ServerCommands {
             });
             return row;
         });
-    }
-
-    public void setupVisualElements() {
-        progressBox.setVisible(false);
-        messageWindow = new MessageWindow();
-        iconFolder = new Image(getClass().getResourceAsStream("folder_icon.png"), 18, 18, true, false);
-        iconFile = new Image(getClass().getResourceAsStream("file_icon.png"), 18, 18, true, false);
-        Image iconDownload = new Image(getClass().getResourceAsStream("download_icon.png"), 48, 48, true, false);
-        downloadButton.setGraphic(new ImageView(iconDownload));
-        Image iconUpload = new Image(getClass().getResourceAsStream("upload_icon.png"), 48, 48, true, false);
-        uploadButton.setGraphic(new ImageView(iconUpload));
-        Image iconAddFolder = new Image(getClass().getResourceAsStream("addFolder_icon.png"), 48, 48, true, false);
-        addFolderButton.setGraphic(new ImageView(iconAddFolder));
-        Image iconLogout = new Image(getClass().getResourceAsStream("logout_icon.png"), 48, 48, true, false);
-        logoutButton.setGraphic(new ImageView(iconLogout));
-        Image iconRefresh = new Image(getClass().getResourceAsStream("refresh_icon.png"), 48, 48, true, false);
-        refreshButton.setGraphic(new ImageView(iconRefresh));
-        Image iconRemove = new Image(getClass().getResourceAsStream("remove_icon.png"), 48, 48, true, false);
-        removeButton.setGraphic(new ImageView(iconRemove));
-        Image iconRename = new Image(getClass().getResourceAsStream("rename_icon.png"), 48, 48, true, false);
-        renameButton.setGraphic(new ImageView(iconRename));
-
-        Image progressGif = new Image(getClass().getResourceAsStream("spinner.gif"), 60, 60, true, false);
-        progressImageView.setImage(progressGif);
     }
 
 }

@@ -22,7 +22,8 @@ public class MyObjectOutputStream implements ServerCommands{
 //        System.out.println("Количество байт " + arr.length);
 
 //        int maxLeading0s = COMMAND_LENGTH - FILES_TREE.length() - SEPARATOR.length();
-        ByteBuffer buffer0 = ByteBuffer.wrap((FILES_TREE + arr.length + SEPARATOR).getBytes());
+//        ByteBuffer buffer0 = ByteBuffer.wrap((FILES_TREE + arr.length + SEPARATOR).getBytes());
+        ByteBuffer buffer0 = ByteBuffer.wrap((arr.length + SEPARATOR).getBytes());
         buffer0.rewind();
         socketChannel.write(buffer0);
         //отправка сообщения с информацией о кол-ве байт в объекте

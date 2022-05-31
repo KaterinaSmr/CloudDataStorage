@@ -100,7 +100,7 @@ public class LoginWindow implements ServerCommands {
     private void openMainWindow(){
         try {
             FXMLLoader fxmlLoader = new FXMLLoader(this.getClass().getResource("mainWindow.fxml"));
-            Scene mainWindowScene = new Scene(fxmlLoader.load(), 600,500);
+            Scene mainWindowScene = new Scene(fxmlLoader.load(), 700,500);
             MainWindow mainWindow = fxmlLoader.getController();
             mainWindow.setSocketChannel(socketChannel);
 

@@ -82,7 +82,6 @@ public class FilesTree implements Serializable {
     public String getName(){
         return file.getName();
     }
-    public String getNameName() {return name;}
 
     public FilesTree validateFile(String path){
         FilesTree result = null;
@@ -108,6 +107,19 @@ public class FilesTree implements Serializable {
         return this.getDisplayName();
     }
 
+//    @Override
+//    public boolean equals(Object o) {
+//        if (this == o) return true;
+//        if (!(o instanceof FilesTree)) return false;
+//        FilesTree filesTree = (FilesTree) o;
+//        return file != null ? file.getAbsolutePath().equals(filesTree.file.getAbsolutePath()) : filesTree.file == null;
+//    }
+//
+//    @Override
+//    public int hashCode() {
+//        return file != null ? file.hashCode() : 0;
+//    }
+
     public ArrayList<FilesTree> getChildren() {
         return children;
     }
@@ -129,5 +141,12 @@ public class FilesTree implements Serializable {
     public String getDisplayName(){
         if (isRoot) return displayName;
         return getName();
+    }
+
+    public void printNode(){
+        System.out.println(this);
+        for (FilesTree f:this.getChildren()) {
+            f.printNode();
+        }
     }
 }

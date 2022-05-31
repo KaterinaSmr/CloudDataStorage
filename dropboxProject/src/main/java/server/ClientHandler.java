@@ -26,7 +26,6 @@ public class ClientHandler implements ServerCommands {
             this.authService =  authService;
     }
     public void read(){
-//        ByteBuffer buffer = ByteBuffer.allocate(256);
         try {
             String header = readHeader(COMMAND_LENGTH + SEPARATOR.length());
             System.out.println("Echo: " + header);
@@ -39,6 +38,7 @@ public class ClientHandler implements ServerCommands {
                     mainDirectory = user.getPath().toFile();
                 } else sendMessage("Wrong login/password");
             } else if (header.startsWith(GETFILELIST)) {
+                sendMessage(FILES_TREE);
                 sendFilesTree();
             } else if (header.startsWith(RENAME)) {
                 String[] strings = readMessage().split(SEPARATOR);
@@ -111,6 +111,9 @@ public class ClientHandler implements ServerCommands {
     private void sendFilesTree() throws IOException{
         rootNode = new FilesTree(mainDirectory, user.getLogin());
         outObjStream.writeObject(rootNode);
+    }
+    private void sendFilesTree(FilesTree node) throws IOException{
+        outObjStream.writeObject(node);
     }
 
     private void logoutUser(){
@@ -204,12 +207,10 @@ public class ClientHandler implements ServerCommands {
             if (remainingBytes > 0) {
                 ByteBuffer buffer1 = ByteBuffer.allocate(remainingBytes);
                 read = socketChannel.read(buffer1);
-                System.out.println("RRRRead: " + read);
                 buffer1.flip();
                 fileChannel.write(buffer1);
                 n += read;
                 buffer.clear();
-                System.out.println("Length " + n);
             }
             System.out.println("File with " + n + " bytes downloaded");
             sendMessage(UPLOADSTAT + SEPARATOR + OK);
@@ -239,17 +240,26 @@ public class ClientHandler implements ServerCommands {
             File file2rename = node2Change.getFile();
             String newPath = path.substring(0, path.length() - file2rename.getName().length()) + newName;
             if (rootNode.validateFile(newPath) != null) {
-                sendMessage(RENAMSTATUS + "File " + newName + " already exist");
+                sendMessage(RENAMSTATUS + NOK + SEPARATOR + "File " + newName + " already exist");
                 return;
             }
             File newFile = new File(newPath);
             if (file2rename.renameTo(newFile)) {
-                node2Change.setFile(newFile);
-                sendMessage(RENAMSTATUS + OK + SEPARATOR + newFile.getAbsolutePath());
+                FilesTree newNode = new FilesTree(newFile);
+                FilesTree parentNode = rootNode.validateFile(newFile.getParentFile().getAbsolutePath());
+                parentNode.getChildren().remove(node2Change);
+                parentNode.getChildren().add(newNode);
+                sendMessage(RENAMSTATUS + OK + SEPARATOR);
+                try {
+                    sendFilesTree(newNode);
+                    System.out.println("Sent updated node: " + newNode.getFile().getName());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
                 return;
             }
         }
-        sendMessage(RENAMSTATUS + "Renaming failed. Please try again later");
+        sendMessage(RENAMSTATUS + NOK + SEPARATOR + "Renaming failed. Please try again later");
     }
 
     private void remove(String path){
