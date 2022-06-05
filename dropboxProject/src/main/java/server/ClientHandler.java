@@ -27,18 +27,19 @@ public class ClientHandler implements ServerCommands {
     }
     public void read(){
         try {
-            String header = readHeader(COMMAND_LENGTH + SEPARATOR.length());
+            String header = readHeader(COMMAND_LENGTH);
             System.out.println("Echo: " + header);
             if (header.startsWith(AUTH)) {
                 String msg = readMessage();
                 user = serverChannel.authorizeMe(msg.split(SEPARATOR)[0], msg.split(SEPARATOR)[1]);
                 if (user != null) {
                     System.out.println("login ok " + user.getId());
-                    sendMessage(AUTHOK + SEPARATOR + user.getId());
+//                    sendMessage(AUTHSTATUS + SEPARATOR + user.getId());
+                    sendMessage(AUTHSTATUS,OK);
                     mainDirectory = user.getPath().toFile();
-                } else sendMessage("Wrong login/password");
+                } else sendMessage(AUTHSTATUS, NOK,"Wrong login/password");
             } else if (header.startsWith(GETFILELIST)) {
-                sendMessage(FILES_TREE);
+                sendMessage(FILES_TREE, OK);
                 sendFilesTree();
             } else if (header.startsWith(RENAME)) {
                 String[] strings = readMessage().split(SEPARATOR);
@@ -53,7 +54,7 @@ public class ClientHandler implements ServerCommands {
                 String[] strings = readMessage().split(SEPARATOR);
                 int filesQty = countFiles(strings[0]);
                 System.out.println("qty of files to send: " + filesQty);
-                sendMessage(DOWNLCOUNT + filesQty + SEPARATOR);
+                sendMessage(DOWNLCOUNT, OK, Integer.toString(filesQty));
                 sendFiles(strings[0]);
             } else if (header.startsWith(UPLOAD)) {
                 String path = readMessageInfo();
@@ -76,25 +77,19 @@ public class ClientHandler implements ServerCommands {
         }
     }
 
-    private void registerNewUser(String login, String pass) {
-        try {
-            if (authService.loginIsBusy(login)) {
-                sendMessage("Login " + login + " is already taken.");
-                return;
-            }
-            String path = authService.registerNewUser(login, pass);
-            if (path == null){
-                sendMessage(UNKNOWN);
-                return;
-            }
-            File rootDirectory = new File(path);
-            if (rootDirectory.mkdirs())
-                sendMessage(SIGNUPOK);
-            else sendMessage(UNKNOWN);
-        } catch (SQLException e) {
-            e.printStackTrace();
-            sendMessage(UNKNOWN);
+    public void sendMsg(String ... str){
+        String message = "";
+        for (String s: str) {
+            message += s + SEPARATOR;
         }
+        ByteBuffer buffer = ByteBuffer.wrap(message.getBytes());
+        buffer.rewind();
+        try {
+            socketChannel.write(buffer);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        buffer.clear();
     }
 
     public void sendMessage(String s) {
@@ -108,6 +103,38 @@ public class ClientHandler implements ServerCommands {
         buffer.clear();
     }
 
+    public void sendMessage(String command, String status, String info) {
+        sendMessage(command + SEPARATOR + status + SEPARATOR + info + SEPARATOR);
+    }
+    public void sendMessage(String command, String status, String info, String moreInfo) {
+        sendMessage(command + SEPARATOR + status + SEPARATOR + info + SEPARATOR + moreInfo + SEPARATOR);
+    }
+
+    public void sendMessage(String command, String status) {
+        sendMessage(command + SEPARATOR + status + SEPARATOR );
+    }
+
+    private void registerNewUser(String login, String pass) {
+        try {
+            if (authService.loginIsBusy(login)) {
+                sendMessage(SIGNUPSTA, NOK, "Login " + login + " is already taken.");
+                return;
+            }
+            String path = authService.registerNewUser(login, pass);
+            if (path == null){
+                sendMessage(SIGNUPSTA, NOK, UNKNOWN);
+                return;
+            }
+            File rootDirectory = new File(path);
+            if (rootDirectory.mkdirs())
+                sendMessage(SIGNUPSTA, OK);
+            else sendMessage(SIGNUPSTA, NOK, UNKNOWN);
+        } catch (SQLException e) {
+            e.printStackTrace();
+            sendMessage(SIGNUPSTA, NOK, UNKNOWN);
+        }
+    }
+
     private void sendFilesTree() throws IOException{
         rootNode = new FilesTree(mainDirectory, user.getLogin());
         outObjStream.writeObject(rootNode);
@@ -117,7 +144,7 @@ public class ClientHandler implements ServerCommands {
     }
 
     private void logoutUser(){
-        sendMessage(LOGOUTOK);
+        sendMessage(LOGOUTOK, "");
         mainDirectory = null;
         rootNode = null;
         user = null;
@@ -130,13 +157,13 @@ public class ClientHandler implements ServerCommands {
             File newFolder = new File(parentTree.getFile().getAbsolutePath() + "/" + name);
             if (rootNode.validateFile(newFolder.getAbsolutePath()) == null) {
                 if (newFolder.mkdir()) {
-                    sendMessage(NEWFOLDSTATUS + OK + SEPARATOR + newFolder.getAbsolutePath());
+                    sendMessage(NEWFOLDSTATUS , OK , "", newFolder.getAbsolutePath());
                 }
             } else {
-                sendMessage(NEWFOLDSTATUS + "File with name " + name + " already exist in directory " + parentTree.getName());
+                sendMessage(NEWFOLDSTATUS , NOK , "File with name " + name + " already exist in directory " + parentTree.getName());
             }
         } else {
-            sendMessage(NEWFOLDSTATUS + "Operation failed. Please try again later");
+            sendMessage(NEWFOLDSTATUS , NOK , "Operation failed. Please try again later");
         }
     }
 
@@ -144,7 +171,7 @@ public class ClientHandler implements ServerCommands {
         rootNode = new FilesTree(mainDirectory, user.getLogin());
         FilesTree node2Send = rootNode.validateFile(path);
         if (node2Send == null) {
-            sendMessage(DOWNLSTATUS + NOK + "File " + path + " not found");
+            sendMessage(DOWNLCOUNT, NOK, "File " + path + " not found");
             return;
         }
         if (node2Send.isDirectory()){
@@ -161,7 +188,7 @@ public class ClientHandler implements ServerCommands {
             FileInputStream fis = new FileInputStream(file);
             FileChannel fc = fis.getChannel();
             ByteBuffer bufferOut = ByteBuffer.allocate((int) file.length());
-            sendMessage(DOWNLSTATUS + SEPARATOR + OK + file.length() + SEPARATOR + file.getAbsolutePath() + SEPARATOR);
+            sendMessage(DOWNLSTATUS ,OK , Long.toString(file.length()) , file.getAbsolutePath());
             while (fc.read(bufferOut) > 0 || bufferOut.position() > 0) {
                 bufferOut.flip();
                 socketChannel.write(bufferOut);
@@ -169,7 +196,7 @@ public class ClientHandler implements ServerCommands {
             }
             return;
         } catch (IOException e) {
-            sendMessage(DOWNLSTATUS + SEPARATOR + NOK + "File " + file.getName() + " cannot be downloaded. " + UNKNOWN);
+            sendMessage(DOWNLSTATUS , NOK, "File " + file.getName() + " cannot be downloaded. " + UNKNOWN);
         }
     }
 
@@ -177,7 +204,7 @@ public class ClientHandler implements ServerCommands {
         rootNode = new FilesTree(mainDirectory, user.getLogin());
         FilesTree parent = rootNode.validateFile(path);
         if (parent == null) {
-            sendMessage(UPLOADSTAT + SEPARATOR + NOK + SEPARATOR + "Upload failed. Parent directory not found on server. Please refresh and try again");
+            sendMessage(UPLOADSTAT, NOK , "Upload failed. Parent directory not found on server. Please refresh and try again");
             return;
         }
         String newFilePath = path + "/" + name;
@@ -213,11 +240,11 @@ public class ClientHandler implements ServerCommands {
                 buffer.clear();
             }
             System.out.println("File with " + n + " bytes downloaded");
-            sendMessage(UPLOADSTAT + SEPARATOR + OK);
+            sendMessage(UPLOADSTAT, OK, "");
             out.close();
         } catch (IOException e) {
             e.printStackTrace();
-            sendMessage(UPLOADSTAT + SEPARATOR + NOK + SEPARATOR + "Upload failed. Please try again later.");
+            sendMessage(UPLOADSTAT, NOK, "Upload failed. Please try again later.");
         }
     }
 
@@ -240,7 +267,7 @@ public class ClientHandler implements ServerCommands {
             File file2rename = node2Change.getFile();
             String newPath = path.substring(0, path.length() - file2rename.getName().length()) + newName;
             if (rootNode.validateFile(newPath) != null) {
-                sendMessage(RENAMSTATUS + NOK + SEPARATOR + "File " + newName + " already exist");
+                sendMessage(RENAMSTATUS, NOK, "File " + newName + " already exist");
                 return;
             }
             File newFile = new File(newPath);
@@ -249,7 +276,7 @@ public class ClientHandler implements ServerCommands {
                 FilesTree parentNode = rootNode.validateFile(newFile.getParentFile().getAbsolutePath());
                 parentNode.getChildren().remove(node2Change);
                 parentNode.getChildren().add(newNode);
-                sendMessage(RENAMSTATUS + OK + SEPARATOR);
+                sendMessage(RENAMSTATUS , OK);
                 try {
                     sendFilesTree(newNode);
                     System.out.println("Sent updated node: " + newNode.getFile().getName());
@@ -259,7 +286,7 @@ public class ClientHandler implements ServerCommands {
                 return;
             }
         }
-        sendMessage(RENAMSTATUS + NOK + SEPARATOR + "Renaming failed. Please try again later");
+        sendMessage(RENAMSTATUS, NOK , "Renaming failed. Please try again later");
     }
 
     private void remove(String path){
@@ -270,12 +297,12 @@ public class ClientHandler implements ServerCommands {
             boolean remFile = removeDir(file2Remove);
             boolean remTree = rootNode.removeChild(node2Remove);
             if (remFile && remTree) {
-                sendMessage(REMSTATUS + OK);
+                sendMessage(REMSTATUS, OK, "");
                 return;
             } else
-                sendMessage(REMSTATUS + "Remove failed. Please try again later");
+                sendMessage(REMSTATUS, NOK,"Remove failed. Please try again later");
         } else {
-            sendMessage(REMSTATUS  + "File not found on server");
+            sendMessage(REMSTATUS, NOK, "File not found on server");
         }
     }
 

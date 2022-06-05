@@ -32,22 +32,37 @@ public class LoginWindow implements ServerCommands {
     private final String ADDR = "localhost";
     private final int PORT = 8189;
 
+//    @FXML
+//    public void onLogin (){
+//        try {
+//            send(AUTH + SEPARATOR + loginField.getText() + SEPARATOR + passwordField.getText());
+//            ByteBuffer buffer = ByteBuffer.allocate(256);
+//            socketChannel.read(buffer);
+//            buffer.flip();
+//            String s = "";
+//            while (buffer.hasRemaining()){
+//                s += (char) buffer.get();
+//            }
+//            System.out.println("ответ:  " + s);
+//            if (s.startsWith(AUTHSTATUS)){
+//                openMainWindow();
+//            } else {
+//                label.setText(s);
+//            }
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
+//    }
     @FXML
     public void onLogin (){
         try {
             send(AUTH + SEPARATOR + loginField.getText() + SEPARATOR + passwordField.getText());
-            ByteBuffer buffer = ByteBuffer.allocate(256);
-            socketChannel.read(buffer);
-            buffer.flip();
-            String s = "";
-            while (buffer.hasRemaining()){
-                s += (char) buffer.get();
-            }
-            System.out.println("ответ:  " + s);
-            if (s.startsWith(AUTHOK)){
-                openMainWindow();
-            } else {
-                label.setText(s);
+            if (readHeader(COMMAND_LENGTH).startsWith(AUTHSTATUS)) {
+                if (readInfo().startsWith(OK))
+                    openMainWindow();
+                else {
+                    label.setText(readMessage());
+                }
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -136,6 +151,40 @@ public class LoginWindow implements ServerCommands {
         ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
         socketChannel.write(buffer);
         buffer.clear();
+    }
+
+    private String readMessage() throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        socketChannel.read(buffer);
+        buffer.flip();
+        String s = "";
+        while (buffer.hasRemaining()) {
+            s += (char) buffer.get();
+        }
+        return s;
+    }
+
+    private String readHeader(int bufferSize) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+        String s = "";
+        socketChannel.read(buffer);
+        buffer.flip();
+        while (buffer.hasRemaining()) {
+            s += (char) buffer.get();
+        }
+        return s;
+    }
+
+    private String readInfo() {
+        String str = "";
+        try {
+            while (!str.endsWith(SEPARATOR)) {
+                str += readHeader(1);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return str.substring(0, str.length() - SEPARATOR.length());
     }
 
     public void onExit(){

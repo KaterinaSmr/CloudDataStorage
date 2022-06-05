@@ -8,26 +8,26 @@ public interface ServerCommands {
     String NEWFOLDER = "/reqnewdir";
     String DOWNLOAD = "/reqdownlo";
     String UPLOAD = "/requpload";
-    String END = "/end";
+    String END = "/requirend";
     String LOGOUT = "/reqlogout";
     String SIGNUP = "/reqsignup";
 
-    String AUTHOK ="/authoriok";
+    String AUTHSTATUS ="/authstatu";
     String FILES_TREE = "/filestree";
     String RENAMSTATUS = "/renamstat";
     String REMSTATUS = "/removalst";
     String NEWFOLDSTATUS = "/newdirsta";
     String DOWNLCOUNT = "/downloqty";
-    String DOWNLSTATUS = "/downs";
+    String DOWNLSTATUS = "/downlstat";
     String UPLOADSTAT = "/uploadsta";
     String OK = "OK";
     String NOK = "NO";
     String INFO = "/infomessg";
     String LOGOUTOK = "/logoutoke";
-    String SIGNUPOK = "/signupoke";
+    String SIGNUPSTA = "/signupsta";
 
     String SEPARATOR = "//";
     String UNKNOWN = "Unknown error. Please try again later.";
-    int COMMAND_LENGTH = 10;
+    int COMMAND_LENGTH = 10 + SEPARATOR.length();
     int DEFAULT_BUFFER = 2048;
 }

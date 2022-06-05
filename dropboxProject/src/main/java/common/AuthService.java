@@ -2,6 +2,7 @@ package common;
 
 import server.User;
 
+import java.io.File;
 import java.sql.*;
 
 public class AuthService implements AuthorizationService{
@@ -17,8 +18,12 @@ public class AuthService implements AuthorizationService{
                 "WHERE login = '" + login + "' AND password = '" + password + "';");
         ResultSet rs = preparedStatement.executeQuery();
         if (rs != null && !rs.isClosed()){
-            return new User(rs.getInt(1), rs.getString(2),
+            User user = new User(rs.getInt(1), rs.getString(2),
                     rs.getString(3), rs.getString(4), rs.getString(5));
+            File rootDirectory = user.getPath().toFile();
+            if (!rootDirectory.exists())
+                rootDirectory.mkdirs();
+            return user;
         }
         return null;
     }

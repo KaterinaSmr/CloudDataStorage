@@ -98,10 +98,6 @@ public class FilesTree implements Serializable {
         this.icon = icon;
     }
 
-    public void setFile(File file) {
-        this.file = file;
-    }
-
     @Override
     public String toString() {
         return this.getDisplayName();
