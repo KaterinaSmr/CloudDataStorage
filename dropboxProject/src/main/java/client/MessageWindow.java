@@ -59,6 +59,7 @@ public class MessageWindow {
         });
     }
     public void show (String title, String message, Type type){
+        if (window.isShowing()) return;
         buttonCancel.setText("Cancel");
         result = false;
         window.setTitle(title);
@@ -68,6 +69,7 @@ public class MessageWindow {
         if (type.equals(Type.CONFIRMATION)){
             buttonPane.getChildren().add(buttonCancel);
         }
+        System.out.println("Message window: " + message);
         window.showAndWait();
     }
 

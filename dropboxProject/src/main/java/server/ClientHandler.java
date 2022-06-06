@@ -77,7 +77,7 @@ public class ClientHandler implements ServerCommands {
         }
     }
 
-    public void sendMsg(String ... str){
+    public void sendMessage(String ... str){
         String message = "";
         for (String s: str) {
             message += s + SEPARATOR;
@@ -92,27 +92,27 @@ public class ClientHandler implements ServerCommands {
         buffer.clear();
     }
 
-    public void sendMessage(String s) {
-        ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
-        buffer.rewind();
-        try {
-            socketChannel.write(buffer);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        buffer.clear();
-    }
+//    public void sendMessage(String s) {
+//        ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
+//        buffer.rewind();
+//        try {
+//            socketChannel.write(buffer);
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
+//        buffer.clear();
+//    }
 
-    public void sendMessage(String command, String status, String info) {
-        sendMessage(command + SEPARATOR + status + SEPARATOR + info + SEPARATOR);
-    }
-    public void sendMessage(String command, String status, String info, String moreInfo) {
-        sendMessage(command + SEPARATOR + status + SEPARATOR + info + SEPARATOR + moreInfo + SEPARATOR);
-    }
-
-    public void sendMessage(String command, String status) {
-        sendMessage(command + SEPARATOR + status + SEPARATOR );
-    }
+//    public void sendMessage(String command, String status, String info) {
+//        sendMessage(command + SEPARATOR + status + SEPARATOR + info + SEPARATOR);
+//    }
+//    public void sendMessage(String command, String status, String info, String moreInfo) {
+//        sendMessage(command + SEPARATOR + status + SEPARATOR + info + SEPARATOR + moreInfo + SEPARATOR);
+//    }
+//
+//    public void sendMessage(String command, String status) {
+//        sendMessage(command + SEPARATOR + status + SEPARATOR );
+//    }
 
     private void registerNewUser(String login, String pass) {
         try {
@@ -204,12 +204,20 @@ public class ClientHandler implements ServerCommands {
         rootNode = new FilesTree(mainDirectory, user.getLogin());
         FilesTree parent = rootNode.validateFile(path);
         if (parent == null) {
-            sendMessage(UPLOADSTAT, NOK , "Upload failed. Parent directory not found on server. Please refresh and try again");
+            sendMessage(UPLOADCHECK, NOK , "Upload failed. Parent directory not found on server. Please refresh and try again");
             return;
         }
         String newFilePath = path + "/" + name;
         System.out.println("new file path: " + newFilePath);
+        FilesTree checkIfExist = rootNode.validateFile(newFilePath);
+        if (checkIfExist != null){
+            sendMessage(UPLOADCHECK, NOK, "File " + name + " already exist");
+            return;
+        }
+        sendMessage(UPLOADCHECK,OK,"");
+        System.out.println("Start read");
         readFile(size, newFilePath);
+        System.out.println("Finish read");
     }
 
     private void readFile(int fileLength, String path) {

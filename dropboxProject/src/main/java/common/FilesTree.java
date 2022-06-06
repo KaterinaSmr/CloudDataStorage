@@ -85,7 +85,8 @@ public class FilesTree implements Serializable {
 
     public FilesTree validateFile(String path){
         FilesTree result = null;
-        if (this.getFile().getAbsolutePath().equals(path))
+        File file = new File(path);
+        if (this.getFile().getAbsolutePath().equals(file.getAbsolutePath()))
             return this;
         for (FilesTree f: this.getChildren()) {
             result = (f.validateFile(path));

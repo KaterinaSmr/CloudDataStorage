@@ -19,6 +19,7 @@ public interface ServerCommands {
     String NEWFOLDSTATUS = "/newdirsta";
     String DOWNLCOUNT = "/downloqty";
     String DOWNLSTATUS = "/downlstat";
+    String UPLOADCHECK = "/uploadche";
     String UPLOADSTAT = "/uploadsta";
     String OK = "OK";
     String NOK = "NO";

@@ -20,7 +20,6 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
-import javax.sound.midi.Soundbank;
 import java.awt.*;
 import java.io.File;
 import java.io.FileInputStream;
@@ -246,12 +245,13 @@ public class MainWindow implements ServerCommands {
                                 String path = downloadPath + serverPath.substring(nodeParentPath.length() + 1);
                                 downloadFile(info, path);
                                 continue;
-                            } else if (header.startsWith(REMSTATUS) || header.startsWith(UPLOADSTAT)) {
+                            } else if (header.startsWith(REMSTATUS) || header.startsWith(UPLOADCHECK) || header.startsWith(UPLOADSTAT)) {
                                 //больше ничего не надо делать
                             }
                         } else if (status.startsWith(NOK)) {
                             //обработка ошибок
                             String errorMessage = readMessage();
+                            System.out.println("Error message: " + errorMessage);
                             Platform.runLater(() -> {
                                 messageWindow.show("Error", errorMessage, MessageWindow.Type.INFORMATION);
                             });
@@ -291,6 +291,8 @@ public class MainWindow implements ServerCommands {
         while (buffer.hasRemaining()) {
             s += (char) buffer.get();
         }
+        if (s.endsWith(SEPARATOR))
+            s = s.substring(0, s.length()-SEPARATOR.length());
         return s;
     }
 
@@ -378,9 +380,9 @@ public class MainWindow implements ServerCommands {
     }
 
     private TreeItem<FilesTree> getTreeItemByValue(TreeItem<FilesTree> checkedItem, FilesTree value) {
-//        System.out.println("Checked item " + checkedItem.getValue().getName());
         TreeItem<FilesTree> result;
-        if (checkedItem != null && checkedItem.getValue().equals(value))
+        if (checkedItem == null) return null;
+        if (checkedItem.getValue().equals(value))
             return checkedItem;
         else {
             for (TreeItem<FilesTree> child : checkedItem.getChildren()) {
@@ -466,7 +468,9 @@ public class MainWindow implements ServerCommands {
             send(DOWNLOAD + SEPARATOR + nodeToDownload.getFile().getAbsolutePath());
             int filesCount = 0;
             try {
-                filesCount = Integer.parseInt(statusExchanger.exchange("OK"));
+                String info = statusExchanger.exchange("OK");
+                if (info.startsWith(NOK)) return;
+                filesCount = Integer.parseInt(info);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -512,7 +516,6 @@ public class MainWindow implements ServerCommands {
             return;
         }
         FilesTree parent = currentTreeItem.getValue();
-
         FileChooser fileChooser = new FileChooser();
         File selectedFile = fileChooser.showOpenDialog(uploadButton.getScene().getWindow());
         if (selectedFile == null) {
@@ -533,6 +536,13 @@ public class MainWindow implements ServerCommands {
                 String msgToServer = UPLOAD + SEPARATOR + parent.getFile().getAbsolutePath() + SEPARATOR + selectedFile.getName() + SEPARATOR + selectedFile.length() + SEPARATOR;
                 System.out.println("Message to Server " + msgToServer);
                 send(msgToServer);
+
+                String nameCheckStatus = statusExchanger.exchange(OK);
+                if (nameCheckStatus.startsWith(NOK)){
+                    progressBox.setVisible(false);
+                    return;
+                }
+
                 int size = 0;
                 int read = 0;
                 while ((read = fc.read(bufferOut)) > 0 || bufferOut.position() > 0) {
@@ -541,6 +551,7 @@ public class MainWindow implements ServerCommands {
                     socketChannel.write(bufferOut);
                     bufferOut.compact();
                 }
+                System.out.println("File sent");
                 String status = statusExchanger.exchange(OK);
                 if (status.startsWith(NOK)){
                     return;
@@ -594,7 +605,7 @@ public class MainWindow implements ServerCommands {
                     messageWindow.show("Removal failed", "Cannot remove root folder", MessageWindow.Type.INFORMATION);
                     return;
                 }
-                messageWindow.show("Please confirm", "Are you sure to remove '" + nodeToRemove.getName() + "' with all its content?", MessageWindow.Type.CONFIRMATION);
+                messageWindow.show("Please confirm", "Are you sure to remove '" + nodeToRemove.getName() + (nodeToRemove.isDirectory() ? "' with all its content?" : ""), MessageWindow.Type.CONFIRMATION);
             }
             boolean toRemove = messageWindow.getResult();
             if (!toRemove) return;
@@ -630,6 +641,7 @@ public class MainWindow implements ServerCommands {
 
         try {
             String newPath = statusExchanger.exchange("ok");
+            if (newPath.startsWith(NOK)) return;
             File newFile = new File(newPath);
             FilesTree newNode = new FilesTree(newFile, true, iconFolder);
             parent.addChild(newNode);
@@ -748,8 +760,10 @@ public class MainWindow implements ServerCommands {
                             FilesTree newNode = tempNode;
                             parentNode.getChildren().add(newNode);
 
-                            parentItem.getChildren().remove(item);
-                            parentItem.getChildren().add(buildTreeView(newNode));
+                            if (newNode.isDirectory()) {
+                                parentItem.getChildren().remove(item);
+                                parentItem.getChildren().add(buildTreeView(newNode));
+                            }
                             treeView.refresh();
                             setSelectedTreeItem(parentItem);
                         } else {
