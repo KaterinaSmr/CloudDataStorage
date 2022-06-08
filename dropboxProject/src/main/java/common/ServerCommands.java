@@ -29,6 +29,7 @@ public interface ServerCommands {
 
     String SEPARATOR = "//";
     String UNKNOWN = "Unknown error. Please try again later.";
+    int TIMEOUT_MINS = 5;
     int COMMAND_LENGTH = 10 + SEPARATOR.length();
     int DEFAULT_BUFFER = 2048;
 }

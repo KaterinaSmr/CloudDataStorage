@@ -32,11 +32,11 @@ import java.util.concurrent.*;
 
 public class MainWindow implements ServerCommands {
     @FXML
+    VBox mainPane;
+    @FXML
     public TreeView<FilesTree> treeView;
     @FXML
     public TableView<FilesTree> tableView;
-    @FXML
-    private TableColumn columnName;
     @FXML
     private TableColumn<FilesTree, String> columnType;
     @FXML
@@ -80,107 +80,6 @@ public class MainWindow implements ServerCommands {
     private int countFiles;
     private Stage loginStage;
     private boolean isLoggedIn;
-
-    public void main1() {
-        statusExchanger = new Exchanger<>();
-        isLoggedIn = true;
-        setupVisualElements();
-
-        try {
-            requestFilesTreeRefresh();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        Thread t1 = new Thread(() -> {
-            try {
-                while (isLoggedIn) {
-                    String header = readHeader(COMMAND_LENGTH);
-                    System.out.println("Header: " + header);
-                    if (header.startsWith(FILES_TREE)) {
-                        int objectSize = Integer.parseInt(readInfo());
-                        try {
-                            filesTree = (FilesTree) inObjStream.readObject(objectSize);
-                            setIcons(filesTree);
-                        } catch (ClassNotFoundException e) {
-                            e.printStackTrace();
-                        }
-                        Platform.runLater(() -> {
-                            refreshFilesTreeAndTable(filesTree);
-                        });
-                    } else if (header.startsWith(RENAMSTATUS)) {
-                        String status = readInfo();
-                        if (status.startsWith(OK)) {
-                            int objectSize = Integer.parseInt(readInfo());
-                            try {
-                                tempNode = (FilesTree) inObjStream.readObject(objectSize);
-                                setIcons(tempNode);
-                            } catch (ClassNotFoundException e) {
-                                e.printStackTrace();
-                            }
-                        } else {
-                            String msg = readMessage();
-                            Platform.runLater(() -> {
-                                messageWindow.show("Error", msg, MessageWindow.Type.INFORMATION);
-                            });
-                        }
-                        try {
-                            statusExchanger.exchange(status);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    } else if (header.startsWith(REMSTATUS) || header.startsWith(NEWFOLDSTATUS)) {
-                        String msg = readMessage();
-                        try {
-                            statusExchanger.exchange(msg);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    } else if (header.startsWith(DOWNLCOUNT)) {
-                        try {
-                            statusExchanger.exchange(readInfo());
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    } else if (header.startsWith(DOWNLSTATUS)) {
-                        String status = header.split(SEPARATOR)[1];
-                        if (status.startsWith(OK)) {
-                            String str = readInfo();
-                            int fileLength = Integer.parseInt(str);
-                            String serverPath = readInfo();
-                            String path = downloadPath + serverPath.substring(nodeParentPath.length() + 1);
-                            downloadFile(fileLength, path);
-                        } else {
-                            String msg = readMessage();
-                            System.out.println(msg);
-                            Platform.runLater(() -> {
-                                messageWindow.show("Error", msg, MessageWindow.Type.INFORMATION);
-                            });
-                        }
-                    } else if (header.startsWith(UPLOADSTAT)) {
-                        try {
-                            statusExchanger.exchange(readInfo());
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    } else if (header.startsWith(INFO)) {
-                        String msg = readMessage();
-                        System.out.println(msg);
-                        Platform.runLater(() -> {
-                            messageWindow.show("Info", msg, MessageWindow.Type.INFORMATION);
-                        });
-                    } else if (header.startsWith(END) || header.startsWith(LOGOUT)) {
-                        break;
-                    }
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            System.out.println("Thread main END");
-        });
-        t1.setDaemon(true);
-        t1.start();
-    }
 
     public void main() {
         statusExchanger = new Exchanger<>();
@@ -459,14 +358,13 @@ public class MainWindow implements ServerCommands {
         }
         System.out.println("Download path: " + downloadPath);
         new Thread(() -> {
-            Platform.runLater(() -> {
-                progressBox.setVisible(true);
-            });
+            showProgressBar();
             TablePosition pos = tableView.getSelectionModel().getSelectedCells().get(0);
             FilesTree nodeToDownload = tableView.getItems().get(pos.getRow());
             nodeParentPath = nodeToDownload.getFile().getParent();
             send(DOWNLOAD + SEPARATOR + nodeToDownload.getFile().getAbsolutePath());
             int filesCount = 0;
+
             try {
                 String info = statusExchanger.exchange("OK");
                 if (info.startsWith(NOK)) return;
@@ -475,8 +373,8 @@ public class MainWindow implements ServerCommands {
                 e.printStackTrace();
             }
             if (filesCount == 0) {
+                hideProgressBar();
                 Platform.runLater(() -> {
-                    progressBox.setVisible(false);
                     messageWindow.show("Warning", "No files to download", MessageWindow.Type.INFORMATION);
                 });
                 return;
@@ -484,15 +382,15 @@ public class MainWindow implements ServerCommands {
             waitingAllFiles = new CountDownLatch(filesCount);
             boolean result;
             try {
-                result = waitingAllFiles.await(2, TimeUnit.MINUTES);
+                result = waitingAllFiles.await(TIMEOUT_MINS, TimeUnit.MINUTES);
             } catch (InterruptedException e) {
                 e.printStackTrace();
                 result = false;
             }
             boolean result1 = result;
+            hideProgressBar();
             Platform.runLater(() -> {
                 if (result1) {
-                    progressBox.setVisible(false);
                     messageWindow.show("Download", "Download completed. " + countFiles + " files downloaded", MessageWindow.Type.CONFIRMATION, "Open folder");
                     try {
                         if (!messageWindow.getResult())
@@ -501,7 +399,6 @@ public class MainWindow implements ServerCommands {
                         e.printStackTrace();
                     }
                 } else {
-                    progressBox.setVisible(false);
                     messageWindow.show("Error", "Download awaiting timeout. Please try again later", MessageWindow.Type.INFORMATION);
                 }
             });
@@ -525,9 +422,7 @@ public class MainWindow implements ServerCommands {
         }
 
         new Thread(() -> {
-            Platform.runLater(() -> {
-                progressBox.setVisible(true);
-            });
+            showProgressBar();
             String uploadStatMsg = "";
             try {
                 FileInputStream fis = new FileInputStream(selectedFile);
@@ -539,21 +434,21 @@ public class MainWindow implements ServerCommands {
 
                 String nameCheckStatus = statusExchanger.exchange(OK);
                 if (nameCheckStatus.startsWith(NOK)){
-                    progressBox.setVisible(false);
+//                    progressBox.setVisible(false);
                     return;
                 }
 
-                int size = 0;
+//                int size = 0;
                 int read = 0;
                 while ((read = fc.read(bufferOut)) > 0 || bufferOut.position() > 0) {
                     bufferOut.flip();
-                    size += read;
+//                    size += read;
                     socketChannel.write(bufferOut);
                     bufferOut.compact();
                 }
-                System.out.println("File sent");
                 String status = statusExchanger.exchange(OK);
                 if (status.startsWith(NOK)){
+                    hideProgressBar();
                     return;
                 }
                 String newFilePath = parent.getFile().getAbsolutePath() + "/" + selectedFile.getName();
@@ -564,16 +459,13 @@ public class MainWindow implements ServerCommands {
                 setSelectedTreeItem(currentTreeItem);
                 uploadStatMsg = "Upload finished";
                 fis.close();
-            } catch (IOException e) {
+            } catch (IOException | InterruptedException e) {
                 uploadStatMsg = "Upload failed. Please try again later";
-                e.printStackTrace();
-            } catch (InterruptedException e) {
-                uploadStatMsg = "Unknown error. Please refresh and try again";
                 e.printStackTrace();
             } finally {
                 String status = uploadStatMsg;
+                hideProgressBar();
                 Platform.runLater(() -> {
-                    progressBox.setVisible(false);
                     messageWindow.show("Info", status, MessageWindow.Type.INFORMATION);
                 });
             }
@@ -594,30 +486,36 @@ public class MainWindow implements ServerCommands {
     @FXML
     public void onRemoveButton() {
         FilesTree nodeToRemove;
-        try {
-            if (tableView.getSelectionModel().getSelectedCells().isEmpty()) {
-                messageWindow.show("Warning", "No files selected", MessageWindow.Type.INFORMATION);
+
+        if (tableView.getSelectionModel().getSelectedCells().isEmpty()) {
+            messageWindow.show("Warning", "No files selected", MessageWindow.Type.INFORMATION);
+            return;
+        } else {
+            TablePosition pos = tableView.getSelectionModel().getSelectedCells().get(0);
+            nodeToRemove = tableView.getItems().get(pos.getRow());
+            if (nodeToRemove.equals(filesTree)) {
+                messageWindow.show("Removal failed", "Cannot remove root folder", MessageWindow.Type.INFORMATION);
                 return;
-            } else {
-                TablePosition pos = tableView.getSelectionModel().getSelectedCells().get(0);
-                nodeToRemove = tableView.getItems().get(pos.getRow());
-                if (nodeToRemove.equals(filesTree)) {
-                    messageWindow.show("Removal failed", "Cannot remove root folder", MessageWindow.Type.INFORMATION);
-                    return;
-                }
-                messageWindow.show("Please confirm", "Are you sure to remove '" + nodeToRemove.getName() + (nodeToRemove.isDirectory() ? "' with all its content?" : ""), MessageWindow.Type.CONFIRMATION);
             }
-            boolean toRemove = messageWindow.getResult();
-            if (!toRemove) return;
+            messageWindow.show("Please confirm", "Are you sure to remove '" + nodeToRemove.getName() + (nodeToRemove.isDirectory() ? "' with all its content?" : ""), MessageWindow.Type.CONFIRMATION);
+        }
+        boolean toRemove = messageWindow.getResult();
+        if (!toRemove) return;
+        new Thread(() -> {
             requestRemove(nodeToRemove.getFile().getAbsolutePath());
             String resp = "";
-            resp = statusExchanger.exchange("ok");
-            if (resp.startsWith(OK)) {
-                removeItem(nodeToRemove);
+            try {
+                resp = statusExchanger.exchange("ok");
+                if (resp.startsWith(OK)) {
+                    removeItem(nodeToRemove);
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } finally {
+                hideProgressBar();
             }
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        }).start();
+
     }
 
     @FXML
@@ -627,32 +525,40 @@ public class MainWindow implements ServerCommands {
 
     @FXML
     public void onAddFolderButton() {
+        TreeItem<FilesTree> item = treeView.getSelectionModel().getSelectedItem();
+        if (item == null) return;
+
         InputWindow inputWindow = new InputWindow();
         inputWindow.show("New Folder", "Please enter folder name", "New Folder");
         String name = inputWindow.getResult();
         System.out.println("New folder name: " + name);
         if (name == null) return;
 
-        TreeItem<FilesTree> item = treeView.getSelectionModel().getSelectedItem();
-        if (item == null) return;
         FilesTree parent = item.getValue();
-        send(NEWFOLDER + SEPARATOR + parent.getFile().getAbsolutePath()
-                + SEPARATOR + name);
 
-        try {
-            String newPath = statusExchanger.exchange("ok");
-            if (newPath.startsWith(NOK)) return;
-            File newFile = new File(newPath);
-            FilesTree newNode = new FilesTree(newFile, true, iconFolder);
-            parent.addChild(newNode);
-            TreeItem<FilesTree> newTreeItem = new TreeItem<>(newNode, new ImageView(iconFolder));
-            treeView.getSelectionModel().getSelectedItem().getChildren().add(newTreeItem);
-            treeView.refresh();
-            setSelectedTreeItem(newTreeItem.getParent());
+        new Thread(()->{
+            showProgressBar();
+            send(NEWFOLDER + SEPARATOR + parent.getFile().getAbsolutePath()
+                    + SEPARATOR + name);
 
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+            try {
+                String newPath = statusExchanger.exchange("ok");
+                if (newPath.startsWith(NOK)) return;
+                File newFile = new File(newPath);
+                FilesTree newNode = new FilesTree(newFile, true, iconFolder);
+                parent.addChild(newNode);
+                TreeItem<FilesTree> newTreeItem = new TreeItem<>(newNode, new ImageView(iconFolder));
+                treeView.getSelectionModel().getSelectedItem().getChildren().add(newTreeItem);
+                treeView.refresh();
+                setSelectedTreeItem(newTreeItem.getParent());
+
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } finally {
+                hideProgressBar();
+            }
+        }).start();
+
     }
 
     @FXML
@@ -748,32 +654,38 @@ public class MainWindow implements ServerCommands {
                     if (s.equals(changedNode.getName())) {
                         return;
                     }
-                    requestRename(changedNode.getFile().getAbsolutePath(), s);
-                    String resp = "";
-                    try {
-                        resp = statusExchanger.exchange("ok");
-                        System.out.println("thread Main got msg: " + resp);
-                        if (resp.startsWith(OK)) {
-                            TreeItem<FilesTree> item = getTreeItemByValue(treeView.getRoot(), changedNode);
-                            TreeItem<FilesTree> parentItem = treeView.getSelectionModel().getSelectedItem();
-                            parentNode.getChildren().remove(changedNode);
-                            FilesTree newNode = tempNode;
-                            parentNode.getChildren().add(newNode);
 
-                            if (newNode.isDirectory()) {
-                                parentItem.getChildren().remove(item);
-                                parentItem.getChildren().add(buildTreeView(newNode));
+                    new Thread(()->{
+                        showProgressBar();
+                        requestRename(changedNode.getFile().getAbsolutePath(), s);
+                        String resp = "";
+                        try {
+                            resp = statusExchanger.exchange("ok");
+                            System.out.println("thread Main got msg: " + resp);
+                            if (resp.startsWith(OK)) {
+                                TreeItem<FilesTree> item = getTreeItemByValue(treeView.getRoot(), changedNode);
+                                TreeItem<FilesTree> parentItem = treeView.getSelectionModel().getSelectedItem();
+                                parentNode.getChildren().remove(changedNode);
+                                FilesTree newNode = tempNode;
+                                parentNode.getChildren().add(newNode);
+
+                                if (newNode.isDirectory()) {
+                                    parentItem.getChildren().remove(item);
+                                    parentItem.getChildren().add(buildTreeView(newNode));
+                                }
+                                treeView.refresh();
+                                setSelectedTreeItem(parentItem);
+                            } else {
+                                tableView.requestFocus();
+                                Robot robot = new Robot();
+                                robot.keyPress(KeyCode.ENTER);
                             }
-                            treeView.refresh();
-                            setSelectedTreeItem(parentItem);
-                        } else {
-                            tableView.requestFocus();
-                            Robot robot = new Robot();
-                            robot.keyPress(KeyCode.ENTER);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        } finally {
+                            hideProgressBar();
                         }
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+                    }).start();
                 }
         );
 
@@ -790,6 +702,26 @@ public class MainWindow implements ServerCommands {
                 }
             });
             return row;
+        });
+    }
+
+
+
+    private void showProgressBar(){
+        Platform.runLater(()->{
+            if (!progressBox.isVisible()) {
+                progressBox.setVisible(true);
+                mainPane.setDisable(true);
+            }
+        });
+    }
+
+    private void hideProgressBar(){
+        Platform.runLater(()->{
+            if (progressBox.isVisible()) {
+                progressBox.setVisible(false);
+                mainPane.setDisable(false);
+            }
         });
     }
 

@@ -7,7 +7,7 @@
 
 <StackPane minHeight="200.0" minWidth="600.0" onKeyPressed="#keyboardHandler" prefHeight="500.0" prefWidth="700.0" xmlns="http://javafx.com/javafx/11.0.2" xmlns:fx="http://javafx.com/fxml/1" fx:controller="client.MainWindow">
     <children>
-        <VBox>
+        <VBox fx:id="mainPane">
             <children>
                 <HBox minHeight="100.0" prefHeight="100.0" prefWidth="700.0" spacing="5.0">
                     <children>
