@@ -1,5 +1,6 @@
 package client;
 
+import common.ChannelReader;
 import common.ServerCommands;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
@@ -13,7 +14,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 
-public class SignUpWindow implements ServerCommands {
+public class SignUpWindow implements ServerCommands, ChannelReader {
     @FXML
     Button btnSignUp;
     @FXML
@@ -45,37 +46,11 @@ public class SignUpWindow implements ServerCommands {
             return;
         }
 
-//        try {
-//            send(SIGNUP + SEPARATOR + login + SEPARATOR + pass1);
-//            ByteBuffer buffer = ByteBuffer.allocate(256);
-//            socketChannel.read(buffer);
-//            buffer.flip();
-//            String s = "";
-//            while (buffer.hasRemaining()){
-//                s += (char) buffer.get();
-//            }
-//            System.out.println("ответ:  " + s);
-//            if (s.startsWith(SIGNUPSTA)){
-//                Platform.runLater(()->{
-//                    messageWindow.show("Congratulations!", "Registration is finished. \n You may now sign in.", MessageWindow.Type.INFORMATION);
-//                });
-//                txtLogin.clear();
-//                passwordField.clear();
-//                repeatPswField.clear();
-//                ((Stage) btnSignUp.getScene().getWindow()).close();
-//                loginStage.show();
-//            } else {
-//                label.setText(s);
-//            }
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
-
         try {
             send(SIGNUP + SEPARATOR + login + SEPARATOR + pass1);
-            String header = readHeader(COMMAND_LENGTH);
+            String header = readHeader(socketChannel, COMMAND_LENGTH);
             if (header.startsWith(SIGNUPSTA)) {
-                if (readInfo().startsWith(OK)) {
+                if (readInfo(socketChannel).startsWith(OK)) {
                     Platform.runLater(() -> {
                         messageWindow.show("Congratulations!", "Registration is finished. \n You may now sign in.", MessageWindow.Type.INFORMATION);
                     });
@@ -85,7 +60,7 @@ public class SignUpWindow implements ServerCommands {
                     ((Stage) btnSignUp.getScene().getWindow()).close();
                     loginStage.show();
                 } else {
-                    label.setText(readMessage());
+                    label.setText(readMessage(socketChannel));
                 }
             }
         } catch (IOException e) {
@@ -112,40 +87,6 @@ public class SignUpWindow implements ServerCommands {
         buffer = ByteBuffer.wrap(s.getBytes());
         socketChannel.write(buffer);
         buffer.clear();
-    }
-
-    private String readMessage() throws IOException {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        socketChannel.read(buffer);
-        buffer.flip();
-        String s = "";
-        while (buffer.hasRemaining()) {
-            s += (char) buffer.get();
-        }
-        return s;
-    }
-
-    private String readHeader(int bufferSize) throws IOException {
-        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
-        String s = "";
-        socketChannel.read(buffer);
-        buffer.flip();
-        while (buffer.hasRemaining()) {
-            s += (char) buffer.get();
-        }
-        return s;
-    }
-
-    private String readInfo() {
-        String str = "";
-        try {
-            while (!str.endsWith(SEPARATOR)) {
-                str += readHeader(1);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return str.substring(0, str.length() - SEPARATOR.length());
     }
 
     public void onExit() {

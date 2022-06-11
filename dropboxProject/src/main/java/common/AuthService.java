@@ -5,14 +5,13 @@ import server.User;
 import java.io.File;
 import java.sql.*;
 
-public class AuthService implements AuthorizationService{
+public class AuthService {
     private Connection connection;
 
     public AuthService(Connection conn) {
         this.connection = conn;
     }
 
-    @Override
     public User getUserByLoginPass(String login, String password) throws SQLException {
         PreparedStatement preparedStatement = connection.prepareStatement("SELECT * FROM clients " +
                 "WHERE login = '" + login + "' AND password = '" + password + "';");

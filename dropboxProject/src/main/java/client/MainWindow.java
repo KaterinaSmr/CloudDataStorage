@@ -1,5 +1,6 @@
 package client;
 
+import common.ChannelReader;
 import common.FilesTree;
 import common.MyObjectInputStream;
 import common.ServerCommands;
@@ -30,7 +31,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.*;
 
-public class MainWindow implements ServerCommands {
+public class MainWindow implements ServerCommands, ChannelReader {
     @FXML
     VBox mainPane;
     @FXML
@@ -95,14 +96,14 @@ public class MainWindow implements ServerCommands {
         Thread t1 = new Thread(() -> {
             try {
                 while (isLoggedIn) {
-                    String header = readHeader(COMMAND_LENGTH);
+                    String header = readHeader(socketChannel, COMMAND_LENGTH);
                     System.out.println("Header: " + header);
-                    String status = readInfo();
+                    String status = readInfo(socketChannel);
                     System.out.println("Status: " + status);
                     String exchangeMessage = status;
                     if (status == null || status == "") {
                         if (header.startsWith(INFO)) {
-                            String msg = readMessage();
+                            String msg = readMessage(socketChannel);
                             Platform.runLater(() -> {
                                 messageWindow.show("Info", msg, MessageWindow.Type.INFORMATION);
                             });
@@ -111,7 +112,7 @@ public class MainWindow implements ServerCommands {
                         }
                     } else {
                         if (status.startsWith(OK)) {
-                            String infoMsg = readInfo();
+                            String infoMsg = readInfo(socketChannel);
                             int info = 0;
                             System.out.println("Info msg: " + infoMsg);
                             if (infoMsg != null && !infoMsg.equals("")) {
@@ -136,11 +137,11 @@ public class MainWindow implements ServerCommands {
                                     e.printStackTrace();
                                 }
                             } else if (header.startsWith(NEWFOLDSTATUS)) {
-                                exchangeMessage = readMessage();
+                                exchangeMessage = readMessage(socketChannel);
                             } else if (header.startsWith(DOWNLCOUNT)) {// info = qty of files to download
                                 exchangeMessage = Integer.toString(info);
                             } else if (header.startsWith(DOWNLSTATUS)) { //info = filelength
-                                String serverPath = readInfo();
+                                String serverPath = readInfo(socketChannel);
                                 String path = downloadPath + serverPath.substring(nodeParentPath.length() + 1);
                                 downloadFile(info, path);
                                 continue;
@@ -149,7 +150,7 @@ public class MainWindow implements ServerCommands {
                             }
                         } else if (status.startsWith(NOK)) {
                             //обработка ошибок
-                            String errorMessage = readMessage();
+                            String errorMessage = readMessage(socketChannel);
                             System.out.println("Error message: " + errorMessage);
                             Platform.runLater(() -> {
                                 messageWindow.show("Error", errorMessage, MessageWindow.Type.INFORMATION);
@@ -180,42 +181,6 @@ public class MainWindow implements ServerCommands {
             e.printStackTrace();
         }
         buffer.clear();
-    }
-
-    private String readMessage() throws IOException {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        socketChannel.read(buffer);
-        buffer.flip();
-        String s = "";
-        while (buffer.hasRemaining()) {
-            s += (char) buffer.get();
-        }
-        if (s.endsWith(SEPARATOR))
-            s = s.substring(0, s.length()-SEPARATOR.length());
-        return s;
-    }
-
-    private String readHeader(int bufferSize) throws IOException {
-        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
-        String s = "";
-        socketChannel.read(buffer);
-        buffer.flip();
-        while (buffer.hasRemaining()) {
-            s += (char) buffer.get();
-        }
-        return s;
-    }
-
-    private String readInfo() {
-        String str = "";
-        try {
-            while (!str.endsWith(SEPARATOR)) {
-                str += readHeader(1);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return str.substring(0, str.length() - SEPARATOR.length());
     }
 
     private void downloadFile(int fileLength, String path) {
