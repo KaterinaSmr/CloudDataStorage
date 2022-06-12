@@ -69,7 +69,6 @@ public class MessageWindow {
         if (type.equals(Type.CONFIRMATION)){
             buttonPane.getChildren().add(buttonCancel);
         }
-        System.out.println("Message window: " + message);
         window.showAndWait();
     }
 

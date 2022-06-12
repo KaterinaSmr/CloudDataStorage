@@ -17,7 +17,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 
 
-public class LoginWindow implements ServerCommands, ChannelReader {
+public class LoginWindow implements ServerCommands, ChannelDataExchanger {
     @FXML
     TextField loginField;
     @FXML
@@ -35,7 +35,7 @@ public class LoginWindow implements ServerCommands, ChannelReader {
     @FXML
     public void onLogin (){
         try {
-            send(AUTH + SEPARATOR + loginField.getText() + SEPARATOR + passwordField.getText());
+            sendMessage(socketChannel, AUTH, loginField.getText(), passwordField.getText());
             if (readHeader(socketChannel, COMMAND_LENGTH).startsWith(AUTHSTATUS)) {
                 if (readInfo(socketChannel).startsWith(OK))
                     openMainWindow();
@@ -126,15 +126,15 @@ public class LoginWindow implements ServerCommands, ChannelReader {
         }
     }
 
-    private void send(String s) throws IOException{
-        ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
-        socketChannel.write(buffer);
-        buffer.clear();
-    }
+//    private void sendMessage(String s) throws IOException{
+//        ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
+//        socketChannel.write(buffer);
+//        buffer.clear();
+//    }
 
     public void onExit(){
         try {
-            send(END);
+            sendMessage(socketChannel, END);
             socketChannel.close();
         } catch (IOException e) {
             e.printStackTrace();

@@ -1,6 +1,6 @@
 package client;
 
-import common.ChannelReader;
+import common.ChannelDataExchanger;
 import common.ServerCommands;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
@@ -11,10 +11,9 @@ import javafx.scene.control.TextField;
 import javafx.stage.Stage;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 
-public class SignUpWindow implements ServerCommands, ChannelReader {
+public class SignUpWindow implements ServerCommands, ChannelDataExchanger {
     @FXML
     Button btnSignUp;
     @FXML
@@ -47,7 +46,7 @@ public class SignUpWindow implements ServerCommands, ChannelReader {
         }
 
         try {
-            send(SIGNUP + SEPARATOR + login + SEPARATOR + pass1);
+            sendMessage(socketChannel, SIGNUP, login, pass1);
             String header = readHeader(socketChannel, COMMAND_LENGTH);
             if (header.startsWith(SIGNUPSTA)) {
                 if (readInfo(socketChannel).startsWith(OK)) {
@@ -82,12 +81,12 @@ public class SignUpWindow implements ServerCommands, ChannelReader {
         this.socketChannel = socketChannel;
     }
 
-    private void send(String s) throws IOException {
-        ByteBuffer buffer = null;
-        buffer = ByteBuffer.wrap(s.getBytes());
-        socketChannel.write(buffer);
-        buffer.clear();
-    }
+//    private void sendMessage(String s) throws IOException {
+//        ByteBuffer buffer = null;
+//        buffer = ByteBuffer.wrap(s.getBytes());
+//        socketChannel.write(buffer);
+//        buffer.clear();
+//    }
 
     public void onExit() {
         try {

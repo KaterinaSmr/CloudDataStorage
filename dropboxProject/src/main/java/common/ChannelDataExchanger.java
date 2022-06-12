@@ -6,7 +6,7 @@ import java.nio.channels.SocketChannel;
 
 import static common.ServerCommands.SEPARATOR;
 
-public interface ChannelReader  {
+public interface ChannelDataExchanger {
 
     default String readMessage(SocketChannel socketChannel) throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
@@ -42,5 +42,20 @@ public interface ChannelReader  {
             e.printStackTrace();
         }
         return str.substring(0, str.length() - SEPARATOR.length());
+    }
+
+    default void sendMessage(SocketChannel socketChannel, String ... str){
+        String message = "";
+        for (String s: str) {
+            message += s + SEPARATOR;
+        }
+        ByteBuffer buffer = ByteBuffer.wrap(message.getBytes());
+        buffer.rewind();
+        try {
+            socketChannel.write(buffer);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        buffer.clear();
     }
 }

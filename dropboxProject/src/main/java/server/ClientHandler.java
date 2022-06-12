@@ -1,16 +1,14 @@
 package server;
 
-import common.AuthService;
-import common.FilesTree;
-import common.MyObjectOutputStream;
-import common.ServerCommands;
+import common.*;
+
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 import java.sql.SQLException;
 
-public class ClientHandler implements ServerCommands {
+public class ClientHandler implements ServerCommands, ChannelDataExchanger {
     private Server serverChannel;
     private SocketChannel socketChannel;
     private AuthService authService;
@@ -27,45 +25,44 @@ public class ClientHandler implements ServerCommands {
     }
     public void read(){
         try {
-            String header = readHeader(COMMAND_LENGTH);
+            String header = readHeader(socketChannel, COMMAND_LENGTH);
             System.out.println("Echo: " + header);
             if (header.startsWith(AUTH)) {
-                String msg = readMessage();
+                String msg = readMessage(socketChannel);
                 user = serverChannel.authorizeMe(msg.split(SEPARATOR)[0], msg.split(SEPARATOR)[1]);
                 if (user != null) {
                     System.out.println("login ok " + user.getId());
-//                    sendMessage(AUTHSTATUS + SEPARATOR + user.getId());
-                    sendMessage(AUTHSTATUS,OK);
+                    sendMessage(socketChannel, AUTHSTATUS,OK);
                     mainDirectory = user.getPath().toFile();
-                } else sendMessage(AUTHSTATUS, NOK,"Wrong login/password");
+                } else sendMessage(socketChannel, AUTHSTATUS, NOK,"Wrong login/password");
             } else if (header.startsWith(GETFILELIST)) {
-                sendMessage(FILES_TREE, OK);
+                sendMessage(socketChannel, FILES_TREE, OK);
                 sendFilesTree();
             } else if (header.startsWith(RENAME)) {
-                String[] strings = readMessage().split(SEPARATOR);
+                String[] strings = readMessage(socketChannel).split(SEPARATOR);
                 rename(strings[0], strings[1]);
             } else if (header.startsWith(REMOVE)) {
-                String[] strings = readMessage().split(SEPARATOR);
+                String[] strings = readMessage(socketChannel).split(SEPARATOR);
                 remove(strings[0]);
             } else if (header.startsWith(NEWFOLDER)) {
-                String[] strings = readMessage().split(SEPARATOR);
+                String[] strings = readMessage(socketChannel).split(SEPARATOR);
                 createFolder(strings[0], strings[1]);
             } else if (header.startsWith(DOWNLOAD)) {
-                String[] strings = readMessage().split(SEPARATOR);
+                String[] strings = readMessage(socketChannel).split(SEPARATOR);
                 int filesQty = countFiles(strings[0]);
                 System.out.println("qty of files to send: " + filesQty);
-                sendMessage(DOWNLCOUNT, OK, Integer.toString(filesQty));
+                sendMessage(socketChannel, DOWNLCOUNT, OK, Integer.toString(filesQty));
                 sendFiles(strings[0]);
             } else if (header.startsWith(UPLOAD)) {
-                String path = readMessageInfo();
-                String fileName = readMessageInfo();
-                int fileSize = Integer.parseInt(readMessageInfo());
+                String path = readInfo(socketChannel);
+                String fileName = readInfo(socketChannel);
+                int fileSize = Integer.parseInt(readInfo(socketChannel));
                 System.out.println("Path: " + path + " | fileName: " + fileName + " | fileSize: " + fileSize);
                 downloadFile(path, fileName, fileSize);
             } else if (header.startsWith(LOGOUT)) {
                 logoutUser();
             } else if(header.startsWith(SIGNUP)){
-                String[] strings = readMessage().split(SEPARATOR);
+                String[] strings = readMessage(socketChannel).split(SEPARATOR);
                 String login = strings[0];
                 String pass = strings[1];
                 registerNewUser(login,pass);
@@ -77,23 +74,12 @@ public class ClientHandler implements ServerCommands {
         }
     }
 
-    public void sendMessage(String ... str){
-        String message = "";
-        for (String s: str) {
-            message += s + SEPARATOR;
-        }
-        ByteBuffer buffer = ByteBuffer.wrap(message.getBytes());
-        buffer.rewind();
-        try {
-            socketChannel.write(buffer);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        buffer.clear();
-    }
-
-//    public void sendMessage(String s) {
-//        ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
+//    public void sendMessage(String ... str){
+//        String message = "";
+//        for (String s: str) {
+//            message += s + SEPARATOR;
+//        }
+//        ByteBuffer buffer = ByteBuffer.wrap(message.getBytes());
 //        buffer.rewind();
 //        try {
 //            socketChannel.write(buffer);
@@ -103,35 +89,24 @@ public class ClientHandler implements ServerCommands {
 //        buffer.clear();
 //    }
 
-//    public void sendMessage(String command, String status, String info) {
-//        sendMessage(command + SEPARATOR + status + SEPARATOR + info + SEPARATOR);
-//    }
-//    public void sendMessage(String command, String status, String info, String moreInfo) {
-//        sendMessage(command + SEPARATOR + status + SEPARATOR + info + SEPARATOR + moreInfo + SEPARATOR);
-//    }
-//
-//    public void sendMessage(String command, String status) {
-//        sendMessage(command + SEPARATOR + status + SEPARATOR );
-//    }
-
     private void registerNewUser(String login, String pass) {
         try {
             if (authService.loginIsBusy(login)) {
-                sendMessage(SIGNUPSTA, NOK, "Login " + login + " is already taken.");
+                sendMessage(socketChannel, SIGNUPSTA, NOK, "Login " + login + " is already taken.");
                 return;
             }
             String path = authService.registerNewUser(login, pass);
             if (path == null){
-                sendMessage(SIGNUPSTA, NOK, UNKNOWN);
+                sendMessage(socketChannel, SIGNUPSTA, NOK, UNKNOWN);
                 return;
             }
             File rootDirectory = new File(path);
             if (rootDirectory.mkdirs())
-                sendMessage(SIGNUPSTA, OK);
-            else sendMessage(SIGNUPSTA, NOK, UNKNOWN);
+                sendMessage(socketChannel, SIGNUPSTA, OK);
+            else sendMessage(socketChannel, SIGNUPSTA, NOK, UNKNOWN);
         } catch (SQLException e) {
             e.printStackTrace();
-            sendMessage(SIGNUPSTA, NOK, UNKNOWN);
+            sendMessage(socketChannel, SIGNUPSTA, NOK, UNKNOWN);
         }
     }
 
@@ -144,7 +119,7 @@ public class ClientHandler implements ServerCommands {
     }
 
     private void logoutUser(){
-        sendMessage(LOGOUTOK, "");
+        sendMessage(socketChannel, LOGOUTOK, "");
         mainDirectory = null;
         rootNode = null;
         user = null;
@@ -157,13 +132,13 @@ public class ClientHandler implements ServerCommands {
             File newFolder = new File(parentTree.getFile().getAbsolutePath() + "/" + name);
             if (rootNode.validateFile(newFolder.getAbsolutePath()) == null) {
                 if (newFolder.mkdir()) {
-                    sendMessage(NEWFOLDSTATUS , OK , "", newFolder.getAbsolutePath());
+                    sendMessage(socketChannel, NEWFOLDSTATUS , OK , "", newFolder.getAbsolutePath());
                 }
             } else {
-                sendMessage(NEWFOLDSTATUS , NOK , "File with name " + name + " already exist in directory " + parentTree.getName());
+                sendMessage(socketChannel, NEWFOLDSTATUS , NOK , "File with name " + name + " already exist in directory " + parentTree.getName());
             }
         } else {
-            sendMessage(NEWFOLDSTATUS , NOK , "Operation failed. Please try again later");
+            sendMessage(socketChannel, NEWFOLDSTATUS , NOK , "Operation failed. Please try again later");
         }
     }
 
@@ -171,7 +146,7 @@ public class ClientHandler implements ServerCommands {
         rootNode = new FilesTree(mainDirectory, user.getLogin());
         FilesTree node2Send = rootNode.validateFile(path);
         if (node2Send == null) {
-            sendMessage(DOWNLCOUNT, NOK, "File " + path + " not found");
+            sendMessage(socketChannel, DOWNLCOUNT, NOK, "File " + path + " not found");
             return;
         }
         if (node2Send.isDirectory()){
@@ -188,7 +163,7 @@ public class ClientHandler implements ServerCommands {
             FileInputStream fis = new FileInputStream(file);
             FileChannel fc = fis.getChannel();
             ByteBuffer bufferOut = ByteBuffer.allocate((int) file.length());
-            sendMessage(DOWNLSTATUS ,OK , Long.toString(file.length()) , file.getAbsolutePath());
+            sendMessage(socketChannel, DOWNLSTATUS ,OK , Long.toString(file.length()) , file.getAbsolutePath());
             while (fc.read(bufferOut) > 0 || bufferOut.position() > 0) {
                 bufferOut.flip();
                 socketChannel.write(bufferOut);
@@ -196,7 +171,7 @@ public class ClientHandler implements ServerCommands {
             }
             return;
         } catch (IOException e) {
-            sendMessage(DOWNLSTATUS , NOK, "File " + file.getName() + " cannot be downloaded. " + UNKNOWN);
+            sendMessage(socketChannel, DOWNLSTATUS , NOK, "File " + file.getName() + " cannot be downloaded. " + UNKNOWN);
         }
     }
 
@@ -204,17 +179,17 @@ public class ClientHandler implements ServerCommands {
         rootNode = new FilesTree(mainDirectory, user.getLogin());
         FilesTree parent = rootNode.validateFile(path);
         if (parent == null) {
-            sendMessage(UPLOADCHECK, NOK , "Upload failed. Parent directory not found on server. Please refresh and try again");
+            sendMessage(socketChannel, UPLOADCHECK, NOK , "Upload failed. Parent directory not found on server. Please refresh and try again");
             return;
         }
         String newFilePath = path + "/" + name;
         System.out.println("new file path: " + newFilePath);
         FilesTree checkIfExist = rootNode.validateFile(newFilePath);
         if (checkIfExist != null){
-            sendMessage(UPLOADCHECK, NOK, "File " + name + " already exist");
+            sendMessage(socketChannel, UPLOADCHECK, NOK, "File " + name + " already exist");
             return;
         }
-        sendMessage(UPLOADCHECK,OK,"");
+        sendMessage(socketChannel, UPLOADCHECK,OK,"");
         System.out.println("Start read");
         readFile(size, newFilePath);
         System.out.println("Finish read");
@@ -248,11 +223,11 @@ public class ClientHandler implements ServerCommands {
                 buffer.clear();
             }
             System.out.println("File with " + n + " bytes downloaded");
-            sendMessage(UPLOADSTAT, OK, "");
+            sendMessage(socketChannel, UPLOADSTAT, OK, "");
             out.close();
         } catch (IOException e) {
             e.printStackTrace();
-            sendMessage(UPLOADSTAT, NOK, "Upload failed. Please try again later.");
+            sendMessage(socketChannel, UPLOADSTAT, NOK, "Upload failed. Please try again later.");
         }
     }
 
@@ -275,7 +250,7 @@ public class ClientHandler implements ServerCommands {
             File file2rename = node2Change.getFile();
             String newPath = path.substring(0, path.length() - file2rename.getName().length()) + newName;
             if (rootNode.validateFile(newPath) != null) {
-                sendMessage(RENAMSTATUS, NOK, "File " + newName + " already exist");
+                sendMessage(socketChannel, RENAMSTATUS, NOK, "File " + newName + " already exist");
                 return;
             }
             File newFile = new File(newPath);
@@ -284,7 +259,7 @@ public class ClientHandler implements ServerCommands {
                 FilesTree parentNode = rootNode.validateFile(newFile.getParentFile().getAbsolutePath());
                 parentNode.getChildren().remove(node2Change);
                 parentNode.getChildren().add(newNode);
-                sendMessage(RENAMSTATUS , OK);
+                sendMessage(socketChannel, RENAMSTATUS , OK);
                 try {
                     sendFilesTree(newNode);
                     System.out.println("Sent updated node: " + newNode.getFile().getName());
@@ -294,7 +269,7 @@ public class ClientHandler implements ServerCommands {
                 return;
             }
         }
-        sendMessage(RENAMSTATUS, NOK , "Renaming failed. Please try again later");
+        sendMessage(socketChannel, RENAMSTATUS, NOK , "Renaming failed. Please try again later");
     }
 
     private void remove(String path){
@@ -305,12 +280,12 @@ public class ClientHandler implements ServerCommands {
             boolean remFile = removeDir(file2Remove);
             boolean remTree = rootNode.removeChild(node2Remove);
             if (remFile && remTree) {
-                sendMessage(REMSTATUS, OK, "");
+                sendMessage(socketChannel, REMSTATUS, OK, "");
                 return;
             } else
-                sendMessage(REMSTATUS, NOK,"Remove failed. Please try again later");
+                sendMessage(socketChannel, REMSTATUS, NOK,"Remove failed. Please try again later");
         } else {
-            sendMessage(REMSTATUS, NOK, "File not found on server");
+            sendMessage(socketChannel, REMSTATUS, NOK, "File not found on server");
         }
     }
 
@@ -322,40 +297,6 @@ public class ClientHandler implements ServerCommands {
             }
         }
         return file.delete();
-    }
-
-    private String readMessage() throws IOException {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        socketChannel.read(buffer);
-        buffer.flip();
-        String s = "";
-        while (buffer.hasRemaining()) {
-            s += (char) buffer.get();
-        }
-        return s;
-    }
-
-    private String readHeader(int bufferSize) throws IOException {
-        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
-        String s = "";
-        socketChannel.read(buffer);
-        buffer.flip();
-        while (buffer.hasRemaining()) {
-            s += (char) buffer.get();
-        }
-        return s;
-    }
-
-    private String readMessageInfo() {
-        String str = "";
-        try {
-            while (!str.endsWith(SEPARATOR)) {
-                str += readHeader(1);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return str.substring(0, str.length() - SEPARATOR.length());
     }
 
     public SocketChannel getSocketChannel() {

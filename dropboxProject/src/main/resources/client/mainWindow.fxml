@@ -39,13 +39,13 @@
                                                 <Label text="No files to display" />
                                             </placeholder>
                                             <columns>
-                                                <TableColumn fx:id="columnName" prefWidth="166.20000612735748" text="Name">
+                                                <TableColumn fx:id="columnName" minWidth="90.0" prefWidth="100.0" text="Name">
                                        <columns>
                                           <TableColumn fx:id="subColumnIcon" editable="false" maxWidth="22.0" minWidth="22.0" prefWidth="22.0" resizable="false" sortable="false" />
                                           <TableColumn fx:id="subColumnName" prefWidth="75.0" />
                                        </columns></TableColumn>
-                                                <TableColumn fx:id="columnType" editable="false" prefWidth="56.199981689453125" sortType="DESCENDING" text="Type" />
-                                                <TableColumn fx:id="columnSize" editable="false" prefWidth="66.20001220703125" text="Size" />
+                                                <TableColumn fx:id="columnType" editable="false" prefWidth="50.0" sortType="DESCENDING" text="Type" />
+                                                <TableColumn fx:id="columnSize" editable="false" prefWidth="65.0" text="Size" />
                                                 <TableColumn fx:id="columnTime" editable="false" prefWidth="90.0" text="Modified" />
                                             </columns>
                                             <columnResizePolicy>

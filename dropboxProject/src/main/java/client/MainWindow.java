@@ -1,6 +1,6 @@
 package client;
 
-import common.ChannelReader;
+import common.ChannelDataExchanger;
 import common.FilesTree;
 import common.MyObjectInputStream;
 import common.ServerCommands;
@@ -31,7 +31,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.*;
 
-public class MainWindow implements ServerCommands, ChannelReader {
+public class MainWindow implements ServerCommands, ChannelDataExchanger {
     @FXML
     VBox mainPane;
     @FXML
@@ -172,17 +172,6 @@ public class MainWindow implements ServerCommands, ChannelReader {
         t1.start();
     }
 
-    private void send(String s) {
-        ByteBuffer buffer = null;
-        try {
-            buffer = ByteBuffer.wrap(s.getBytes());
-            socketChannel.write(buffer);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        buffer.clear();
-    }
-
     private void downloadFile(int fileLength, String path) {
         System.out.println("File path: " + path + " | File length " + fileLength);
         int bufferSize = Math.min(fileLength, DEFAULT_BUFFER);
@@ -270,15 +259,15 @@ public class MainWindow implements ServerCommands, ChannelReader {
     }
 
     private void requestFilesTreeRefresh() {
-        send(GETFILELIST);
+        sendMessage(socketChannel, GETFILELIST);
     }
 
     private void requestRename(String path, String newName) {
-        send(RENAME + SEPARATOR + path + SEPARATOR + newName);
+        sendMessage(socketChannel,RENAME, path, newName);
     }
 
     private void requestRemove(String path) {
-        send(REMOVE + SEPARATOR + path);
+        sendMessage(socketChannel, REMOVE, path);
     }
 
     private void removeItem(FilesTree nodeToRemove) {
@@ -327,7 +316,7 @@ public class MainWindow implements ServerCommands, ChannelReader {
             TablePosition pos = tableView.getSelectionModel().getSelectedCells().get(0);
             FilesTree nodeToDownload = tableView.getItems().get(pos.getRow());
             nodeParentPath = nodeToDownload.getFile().getParent();
-            send(DOWNLOAD + SEPARATOR + nodeToDownload.getFile().getAbsolutePath());
+            sendMessage(socketChannel, DOWNLOAD , nodeToDownload.getFile().getAbsolutePath());
             int filesCount = 0;
 
             try {
@@ -393,21 +382,16 @@ public class MainWindow implements ServerCommands, ChannelReader {
                 FileInputStream fis = new FileInputStream(selectedFile);
                 FileChannel fc = fis.getChannel();
                 ByteBuffer bufferOut = ByteBuffer.allocate((int) selectedFile.length());
-                String msgToServer = UPLOAD + SEPARATOR + parent.getFile().getAbsolutePath() + SEPARATOR + selectedFile.getName() + SEPARATOR + selectedFile.length() + SEPARATOR;
-                System.out.println("Message to Server " + msgToServer);
-                send(msgToServer);
+                sendMessage(socketChannel, UPLOAD ,parent.getFile().getAbsolutePath() , selectedFile.getName() , Long.toString(selectedFile.length()));
 
                 String nameCheckStatus = statusExchanger.exchange(OK);
                 if (nameCheckStatus.startsWith(NOK)){
-//                    progressBox.setVisible(false);
                     return;
                 }
 
-//                int size = 0;
                 int read = 0;
                 while ((read = fc.read(bufferOut)) > 0 || bufferOut.position() > 0) {
                     bufferOut.flip();
-//                    size += read;
                     socketChannel.write(bufferOut);
                     bufferOut.compact();
                 }
@@ -503,8 +487,7 @@ public class MainWindow implements ServerCommands, ChannelReader {
 
         new Thread(()->{
             showProgressBar();
-            send(NEWFOLDER + SEPARATOR + parent.getFile().getAbsolutePath()
-                    + SEPARATOR + name);
+            sendMessage(socketChannel, NEWFOLDER , parent.getFile().getAbsolutePath(), name);
 
             try {
                 String newPath = statusExchanger.exchange("ok");
@@ -533,7 +516,7 @@ public class MainWindow implements ServerCommands, ChannelReader {
         //close this window
         Stage thisStage = (Stage) logoutButton.getScene().getWindow();
         thisStage.close();
-        send(LOGOUT);
+        sendMessage(socketChannel, LOGOUT);
         //наверно надо дождаться ответа от сервера о подтверждении логаута
         loginStage.show();
     }
@@ -550,7 +533,7 @@ public class MainWindow implements ServerCommands, ChannelReader {
 
     public void onExit() {
         try {
-            send(END);
+            sendMessage(socketChannel, END);
             socketChannel.close();
         } catch (IOException e) {
             e.printStackTrace();
