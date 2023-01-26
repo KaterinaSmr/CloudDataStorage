@@ -3,17 +3,18 @@ package server;
 import common.*;
 
 import java.io.*;
+import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 import java.sql.SQLException;
 
 public class ClientHandler implements ServerCommands, ChannelDataExchanger {
-    private Server serverChannel;
-    private SocketChannel socketChannel;
-    private AuthService authService;
+    private final Server serverChannel;
+    private final SocketChannel socketChannel;
+    private final AuthService authService;
     private User user;
-    private MyObjectOutputStream outObjStream;
+    private final MyObjectOutputStream outObjStream;
     private File mainDirectory;
     private FilesTree rootNode;
 
@@ -23,71 +24,67 @@ public class ClientHandler implements ServerCommands, ChannelDataExchanger {
             this.outObjStream = new MyObjectOutputStream(socketChannel);
             this.authService =  authService;
     }
-    public void read(){
+    public void read (){
         try {
-            String header = readHeader(socketChannel, COMMAND_LENGTH);
+            String header = readHeader(socketChannel, COMMAND_LENGTH).substring(0,10);
             System.out.println("Echo: " + header);
-            if (header.startsWith(AUTH)) {
-                String msg = readMessage(socketChannel);
-                user = serverChannel.authorizeMe(msg.split(SEPARATOR)[0], msg.split(SEPARATOR)[1]);
-                if (user != null) {
-                    System.out.println("login ok " + user.getId());
-                    sendMessage(socketChannel, AUTHSTATUS,OK);
-                    mainDirectory = user.getPath().toFile();
-                } else sendMessage(socketChannel, AUTHSTATUS, NOK,"Wrong login/password");
-            } else if (header.startsWith(GETFILELIST)) {
-                sendMessage(socketChannel, FILES_TREE, OK);
-                sendFilesTree();
-            } else if (header.startsWith(RENAME)) {
-                String[] strings = readMessage(socketChannel).split(SEPARATOR);
-                rename(strings[0], strings[1]);
-            } else if (header.startsWith(REMOVE)) {
-                String[] strings = readMessage(socketChannel).split(SEPARATOR);
-                remove(strings[0]);
-            } else if (header.startsWith(NEWFOLDER)) {
-                String[] strings = readMessage(socketChannel).split(SEPARATOR);
-                createFolder(strings[0], strings[1]);
-            } else if (header.startsWith(DOWNLOAD)) {
-                String[] strings = readMessage(socketChannel).split(SEPARATOR);
-                int filesQty = countFiles(strings[0]);
-                System.out.println("qty of files to send: " + filesQty);
-                sendMessage(socketChannel, DOWNLCOUNT, OK, Integer.toString(filesQty));
-                sendFiles(strings[0]);
-            } else if (header.startsWith(UPLOAD)) {
-                String path = readInfo(socketChannel);
-                String fileName = readInfo(socketChannel);
-                int fileSize = Integer.parseInt(readInfo(socketChannel));
-                System.out.println("Path: " + path + " | fileName: " + fileName + " | fileSize: " + fileSize);
-                downloadFile(path, fileName, fileSize);
-            } else if (header.startsWith(LOGOUT)) {
-                logoutUser();
-            } else if(header.startsWith(SIGNUP)){
-                String[] strings = readMessage(socketChannel).split(SEPARATOR);
-                String login = strings[0];
-                String pass = strings[1];
-                registerNewUser(login,pass);
-            } else if (header.startsWith(END)) {
-                serverChannel.unSubscribeMe(this);
+            switch (header) {
+                case AUTH -> {
+                    String msg = readMessage(socketChannel);
+                    user = serverChannel.authorizeMe(msg.split(SEPARATOR)[0], msg.split(SEPARATOR)[1]);
+                    if (user != null) {
+                        System.out.println("login ok " + user.getId());
+                        sendMessage(socketChannel, AUTHSTATUS, OK);
+                        mainDirectory = user.getPath().toFile();
+                    } else sendMessage(socketChannel, AUTHSTATUS, NOK, "Wrong login/password");
+                }
+                case GETFILELIST -> {
+                    sendMessage(socketChannel, FILES_TREE, OK);
+                    sendFilesTree();
+                }
+                case RENAME -> {
+                    String[] strings = readMessage(socketChannel).split(SEPARATOR);
+                    rename(strings[0], strings[1]);
+                }
+                case REMOVE -> {
+                    String[] strings = readMessage(socketChannel).split(SEPARATOR);
+                    remove(strings[0]);
+                }
+                case NEWFOLDER -> {
+                    String[] strings = readMessage(socketChannel).split(SEPARATOR);
+                    createFolder(strings[0], strings[1]);
+                }
+                case DOWNLOAD -> {
+                    String[] strings = readMessage(socketChannel).split(SEPARATOR);
+                    int filesQty = countFiles(strings[0]);
+                    System.out.println("qty of files to send: " + filesQty);
+                    sendMessage(socketChannel, DOWNLCOUNT, OK, Integer.toString(filesQty));
+                    sendFiles(strings[0]);
+                }
+                case UPLOAD -> {
+                    String path = readInfo(socketChannel);
+                    String fileName = readInfo(socketChannel);
+                    int fileSize = Integer.parseInt(readInfo(socketChannel));
+                    System.out.println("Path: " + path + " | fileName: " + fileName + " | fileSize: " + fileSize);
+                    downloadFile(path, fileName, fileSize);
+                }
+                case LOGOUT -> logoutUser();
+                case SIGNUP -> {
+                    String[] strings = readMessage(socketChannel).split(SEPARATOR);
+                    String login = strings[0];
+                    String pass = strings[1];
+                    registerNewUser(login, pass);
+                }
+                case END -> serverChannel.unSubscribeMe(this);
+                default -> {
+                    readMessage(socketChannel);
+                    sendMessage(socketChannel, INFO, "Unknown request");
+                }
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
-
-//    public void sendMessage(String ... str){
-//        String message = "";
-//        for (String s: str) {
-//            message += s + SEPARATOR;
-//        }
-//        ByteBuffer buffer = ByteBuffer.wrap(message.getBytes());
-//        buffer.rewind();
-//        try {
-//            socketChannel.write(buffer);
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
-//        buffer.clear();
-//    }
 
     private void registerNewUser(String login, String pass) {
         try {
@@ -159,8 +156,7 @@ public class ClientHandler implements ServerCommands, ChannelDataExchanger {
     }
 
     private void sendSingeFile(File file) {
-        try {
-            FileInputStream fis = new FileInputStream(file);
+        try (FileInputStream fis = new FileInputStream(file)) {
             FileChannel fc = fis.getChannel();
             ByteBuffer bufferOut = ByteBuffer.allocate((int) file.length());
             sendMessage(socketChannel, DOWNLSTATUS ,OK , Long.toString(file.length()) , file.getAbsolutePath());
@@ -169,7 +165,6 @@ public class ClientHandler implements ServerCommands, ChannelDataExchanger {
                 socketChannel.write(bufferOut);
                 bufferOut.compact();
             }
-            return;
         } catch (IOException e) {
             sendMessage(socketChannel, DOWNLSTATUS , NOK, "File " + file.getName() + " cannot be downloaded. " + UNKNOWN);
         }
@@ -281,7 +276,6 @@ public class ClientHandler implements ServerCommands, ChannelDataExchanger {
             boolean remTree = rootNode.removeChild(node2Remove);
             if (remFile && remTree) {
                 sendMessage(socketChannel, REMSTATUS, OK, "");
-                return;
             } else
                 sendMessage(socketChannel, REMSTATUS, NOK,"Remove failed. Please try again later");
         } else {

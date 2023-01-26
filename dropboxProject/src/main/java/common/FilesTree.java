@@ -12,7 +12,7 @@ import java.util.Date;
 import java.util.TimeZone;
 
 public class FilesTree implements Serializable {
-    private ArrayList<FilesTree> children;
+    private final ArrayList<FilesTree> children;
     private File file;
 
     private ImageView icon;
@@ -84,7 +84,7 @@ public class FilesTree implements Serializable {
     }
 
     public FilesTree validateFile(String path){
-        FilesTree result = null;
+        FilesTree result;
         File file = new File(path);
         if (this.getFile().getAbsolutePath().equals(file.getAbsolutePath()))
             return this;

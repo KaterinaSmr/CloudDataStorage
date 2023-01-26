@@ -39,7 +39,7 @@ public class SignUpWindow implements ServerCommands, ChannelDataExchanger {
         if (login == null || pass1 == null || pass2 == null)
             return;
         if (!pass1.equals(pass2)){
-            Platform.runLater(()->{
+            Platform.runLater(()-> {
                 messageWindow.show("Check fail", "The passwords don't match", MessageWindow.Type.INFORMATION);
             });
             return;
@@ -81,16 +81,9 @@ public class SignUpWindow implements ServerCommands, ChannelDataExchanger {
         this.socketChannel = socketChannel;
     }
 
-//    private void sendMessage(String s) throws IOException {
-//        ByteBuffer buffer = null;
-//        buffer = ByteBuffer.wrap(s.getBytes());
-//        socketChannel.write(buffer);
-//        buffer.clear();
-//    }
-
     public void onExit() {
         try {
-//            send(END);
+            sendMessage(socketChannel, END);
             socketChannel.close();
         } catch (IOException e) {
             e.printStackTrace();

@@ -12,6 +12,7 @@ import javafx.stage.Stage;
 import common.*;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
@@ -34,12 +35,22 @@ public class LoginWindow implements ServerCommands, ChannelDataExchanger {
 
     @FXML
     public void onLogin (){
+        System.out.println("channel is open " + socketChannel.isOpen());
+
+        if (!socketChannel.isOpen()){
+            if (!initSocketChannel()){
+                label.setWrapText(true);
+                label.setText("Server unavailable.Please try again later.");
+                return;
+            }
+        }
         try {
             sendMessage(socketChannel, AUTH, loginField.getText(), passwordField.getText());
             if (readHeader(socketChannel, COMMAND_LENGTH).startsWith(AUTHSTATUS)) {
                 if (readInfo(socketChannel).startsWith(OK))
-                    openMainWindow();
+                    openMainWindow(AUTH + SEPARATOR + loginField.getText() + SEPARATOR + passwordField.getText() + SEPARATOR);
                 else {
+
                     label.setText(readMessage(socketChannel));
                 }
             }
@@ -82,21 +93,27 @@ public class LoginWindow implements ServerCommands, ChannelDataExchanger {
     }
 
     public LoginWindow() {
+           initSocketChannel();
+    }
+
+    public boolean initSocketChannel(){
         try {
             socketChannel = SocketChannel.open();
             socketChannel.connect(new InetSocketAddress(ADDR, PORT));
             socketChannel.configureBlocking(true);
+            return true;
         } catch (IOException e) {
             e.printStackTrace();
+            return false;
         }
     }
 
-    private void openMainWindow(){
+    private void openMainWindow(String authMessage){
         try {
             FXMLLoader fxmlLoader = new FXMLLoader(this.getClass().getResource("mainWindow.fxml"));
             Scene mainWindowScene = new Scene(fxmlLoader.load(), 700,500);
             MainWindow mainWindow = fxmlLoader.getController();
-            mainWindow.setSocketChannel(socketChannel);
+            mainWindow.setSocketChannel(socketChannel, authMessage);
 
             Stage mainStage = new Stage();
             mainStage.setScene(mainWindowScene);
@@ -125,12 +142,6 @@ public class LoginWindow implements ServerCommands, ChannelDataExchanger {
             e.printStackTrace();
         }
     }
-
-//    private void sendMessage(String s) throws IOException{
-//        ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
-//        socketChannel.write(buffer);
-//        buffer.clear();
-//    }
 
     public void onExit(){
         try {

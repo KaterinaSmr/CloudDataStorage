@@ -6,7 +6,8 @@ import java.io.File;
 import java.sql.*;
 
 public class AuthService {
-    private Connection connection;
+    private final Connection connection;
+    private final String defaultPathToStorage = "D:/Projects/j4DB/";
 
     public AuthService(Connection conn) {
         this.connection = conn;
@@ -31,10 +32,7 @@ public class AuthService {
         PreparedStatement preparedStatement = connection.prepareStatement("SELECT * FROM clients " +
                 "WHERE login = '" + login +"';");
         ResultSet rs = preparedStatement.executeQuery();
-        if (rs != null && !rs.isClosed()){
-            return true;
-        }
-        return false;
+        return rs != null && !rs.isClosed();
     }
 
     public String registerNewUser(String login, String password) throws SQLException{
@@ -47,10 +45,10 @@ public class AuthService {
             id = rs1.getInt(1);
         }
 
-        String path = "D:/Projects/j4DB/" + id;
-        preparedStatement = connection.prepareStatement("UPDATE clients SET path = '" + path + "'  WHERE id = " + id + ";");
+        String pathToStorage = defaultPathToStorage + id;
+        preparedStatement = connection.prepareStatement("UPDATE clients SET path = '" + pathToStorage + "'  WHERE id = " + id + ";");
         if (preparedStatement.executeUpdate() < 1)
             return null;
-        return path;
+        return pathToStorage;
     }
 }

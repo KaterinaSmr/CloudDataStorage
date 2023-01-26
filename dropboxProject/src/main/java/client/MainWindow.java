@@ -26,6 +26,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
@@ -94,78 +95,89 @@ public class MainWindow implements ServerCommands, ChannelDataExchanger {
         }
 
         Thread t1 = new Thread(() -> {
-            try {
                 while (isLoggedIn) {
-                    String header = readHeader(socketChannel, COMMAND_LENGTH);
-                    System.out.println("Header: " + header);
-                    String status = readInfo(socketChannel);
-                    System.out.println("Status: " + status);
-                    String exchangeMessage = status;
-                    if (status == null || status == "") {
-                        if (header.startsWith(INFO)) {
-                            String msg = readMessage(socketChannel);
-                            Platform.runLater(() -> {
-                                messageWindow.show("Info", msg, MessageWindow.Type.INFORMATION);
-                            });
-                        } else if (header.startsWith(LOGOUT)) {
-                            break;
-                        }
-                    } else {
-                        if (status.startsWith(OK)) {
-                            String infoMsg = readInfo(socketChannel);
-                            int info = 0;
-                            System.out.println("Info msg: " + infoMsg);
-                            if (infoMsg != null && !infoMsg.equals("")) {
-                                info = Integer.parseInt(infoMsg);
-                            }
-                            if (header.startsWith(FILES_TREE)) {
-                                try { //info = object size
-                                    filesTree = (FilesTree) inObjStream.readObject(info);
-                                    setIcons(filesTree);
-                                } catch (ClassNotFoundException e) {
-                                    e.printStackTrace();
+                    try {
+                        String header = readHeader(socketChannel, COMMAND_LENGTH).substring(0,10);
+                        System.out.println("Header: " + header);
+                        String status = readInfo(socketChannel);
+                        System.out.println("Status: " + status);
+                        String exchangeMessage = status;
+                        switch (status) {
+                            case OK:
+                                String infoMsg = readInfo(socketChannel);
+                                int info = 0;
+                                System.out.println("Info msg: " + infoMsg);
+                                if (infoMsg != null && !infoMsg.equals("")) {
+                                    info = Integer.parseInt(infoMsg);
                                 }
+                                switch (header) {
+                                    case FILES_TREE -> {//info = object size
+                                        filesTree = (FilesTree) inObjStream.readObject(info);
+                                        setIcons(filesTree);
+                                        Platform.runLater(() -> {
+                                            refreshFilesTreeAndTable(filesTree);
+                                        });
+                                        continue;
+                                    }
+                                    case RENAMSTATUS -> {//info = object size
+                                        tempNode = (FilesTree) inObjStream.readObject(info);
+                                        setIcons(tempNode);
+                                    }
+                                    case NEWFOLDSTATUS -> exchangeMessage = readMessage(socketChannel);
+                                    case DOWNLCOUNT ->// info = qty of files to download
+                                            exchangeMessage = Integer.toString(info);
+                                    case DOWNLSTATUS -> { //info = filelength
+                                        String serverPath = readInfo(socketChannel);
+                                        String path = downloadPath + serverPath.substring(nodeParentPath.length() + 1);
+                                        downloadFile(info, path);
+                                        continue;
+                                    }
+                                }
+                                statusExchanger.exchange(exchangeMessage);
+                                break;
+                            case NOK:
+                                //обработка ошибок
+                                String errorMessage = readMessage(socketChannel);
+                                System.out.println("Error message: " + errorMessage);
                                 Platform.runLater(() -> {
-                                    refreshFilesTreeAndTable(filesTree);
+                                    messageWindow.show("Error", errorMessage, MessageWindow.Type.INFORMATION);
                                 });
-                                continue;
-                            } else if (header.startsWith(RENAMSTATUS)) {
-                                try {//info = object size
-                                    tempNode = (FilesTree) inObjStream.readObject(info);
-                                    setIcons(tempNode);
-                                } catch (ClassNotFoundException e) {
-                                    e.printStackTrace();
+                                statusExchanger.exchange(exchangeMessage);
+                                break;
+                            default:
+                                if (header.startsWith(INFO)) {
+                                    String msg = readMessage(socketChannel);
+                                    Platform.runLater(() -> {
+                                        messageWindow.show("Info", msg, MessageWindow.Type.INFORMATION);
+                                    });
+                                } else if (header.startsWith(LOGOUT)) {
+                                    break;
                                 }
-                            } else if (header.startsWith(NEWFOLDSTATUS)) {
-                                exchangeMessage = readMessage(socketChannel);
-                            } else if (header.startsWith(DOWNLCOUNT)) {// info = qty of files to download
-                                exchangeMessage = Integer.toString(info);
-                            } else if (header.startsWith(DOWNLSTATUS)) { //info = filelength
-                                String serverPath = readInfo(socketChannel);
-                                String path = downloadPath + serverPath.substring(nodeParentPath.length() + 1);
-                                downloadFile(info, path);
-                                continue;
-                            } else if (header.startsWith(REMSTATUS) || header.startsWith(UPLOADCHECK) || header.startsWith(UPLOADSTAT)) {
-                                //больше ничего не надо делать
-                            }
-                        } else if (status.startsWith(NOK)) {
-                            //обработка ошибок
-                            String errorMessage = readMessage(socketChannel);
-                            System.out.println("Error message: " + errorMessage);
-                            Platform.runLater(() -> {
-                                messageWindow.show("Error", errorMessage, MessageWindow.Type.INFORMATION);
-                            });
                         }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        isLoggedIn = false;
                         try {
-                            statusExchanger.exchange(exchangeMessage);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
+                            socketChannel.close();
+                        } catch (IOException ex) {
+                            ex.printStackTrace();
                         }
+                        Platform.runLater(()->{
+                            messageWindow.show("Error", "Server unavailable. Please try to reconnect.", MessageWindow.Type.INFORMATION);
+                        });
+                        Platform.runLater(()->{
+                            Stage thisStage = (Stage) logoutButton.getScene().getWindow();
+                            thisStage.close();
+                            loginStage.show();
+                        });
+
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        Platform.runLater(() -> {
+                            messageWindow.show("Error", "Internal Error. Please try again later", MessageWindow.Type.INFORMATION);
+                        });
                     }
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
             System.out.println("Thread main END");
         });
         t1.setDaemon(true);
@@ -183,7 +195,7 @@ public class MainWindow implements ServerCommands, ChannelDataExchanger {
             FileChannel fileChannel = out.getChannel();
             ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
             int n = 0;
-            int read = 0;
+            int read;
             while ((read = socketChannel.read(buffer)) > 0) {
                 buffer.flip();
                 fileChannel.write(buffer);
@@ -215,7 +227,7 @@ public class MainWindow implements ServerCommands, ChannelDataExchanger {
         }
     }
 
-    public void setSocketChannel(SocketChannel socketChannel) throws IOException {
+    public void setSocketChannel(SocketChannel socketChannel, String authMessage) throws IOException {
         this.socketChannel = socketChannel;
         inObjStream = new MyObjectInputStream(socketChannel);
     }
@@ -452,7 +464,7 @@ public class MainWindow implements ServerCommands, ChannelDataExchanger {
         if (!toRemove) return;
         new Thread(() -> {
             requestRemove(nodeToRemove.getFile().getAbsolutePath());
-            String resp = "";
+            String resp;
             try {
                 resp = statusExchanger.exchange("ok");
                 if (resp.startsWith(OK)) {
@@ -512,12 +524,12 @@ public class MainWindow implements ServerCommands, ChannelDataExchanger {
     @FXML
     public void onLogoutButton() {
         messageWindow.show("Please confirm", "Are you sure to log out?", MessageWindow.Type.CONFIRMATION);
-        if (isLoggedIn = !messageWindow.getResult()) return;
+        isLoggedIn = !messageWindow.getResult();
+        if (isLoggedIn) return;
         //close this window
         Stage thisStage = (Stage) logoutButton.getScene().getWindow();
         thisStage.close();
         sendMessage(socketChannel, LOGOUT);
-        //наверно надо дождаться ответа от сервера о подтверждении логаута
         loginStage.show();
     }
 
@@ -606,7 +618,7 @@ public class MainWindow implements ServerCommands, ChannelDataExchanger {
                     new Thread(()->{
                         showProgressBar();
                         requestRename(changedNode.getFile().getAbsolutePath(), s);
-                        String resp = "";
+                        String resp;
                         try {
                             resp = statusExchanger.exchange("ok");
                             System.out.println("thread Main got msg: " + resp);

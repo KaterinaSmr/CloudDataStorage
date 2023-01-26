@@ -13,13 +13,12 @@ import javafx.stage.Stage;
 
 
 public class MessageWindow {
-    private Stage window;
-    private Label label;
-    private Button buttonOk;
-    private Button buttonCancel;
-    private VBox layout;
-    private HBox buttonPane;
-    public enum Type {INFORMATION, CONFIRMATION};
+    private final Stage window;
+    private final Label label;
+    private final Button buttonOk;
+    private final Button buttonCancel;
+    private final HBox buttonPane;
+    public enum Type {INFORMATION, CONFIRMATION}
     private boolean result;
 
     public MessageWindow(){
@@ -39,7 +38,7 @@ public class MessageWindow {
         window.setHeight(200);
         window.setWidth(250);
         window.setResizable(false);
-        layout = new VBox(25);
+        VBox layout = new VBox(25);
         buttonPane = new HBox( 15);
 
         layout.setAlignment(Pos.CENTER);
@@ -62,6 +61,7 @@ public class MessageWindow {
         if (window.isShowing()) return;
         buttonCancel.setText("Cancel");
         result = false;
+        buttonOk.setDisable(false);
         window.setTitle(title);
         label.setText(message);
         buttonPane.getChildren().clear();
@@ -74,7 +74,23 @@ public class MessageWindow {
 
     public void show (String title, String message, Type type, String name){
         result = false;
+        buttonOk.setDisable(false);
         buttonCancel.setText(name);
+        window.setTitle(title);
+        label.setText(message);
+        buttonPane.getChildren().clear();
+        buttonPane.getChildren().add(buttonOk);
+        if (type.equals(Type.CONFIRMATION)){
+            buttonPane.getChildren().add(buttonCancel);
+        }
+        window.showAndWait();
+    }
+
+    public void show (String title, String message, Type type, boolean buttonOkDisabled){
+        if (window.isShowing()) return;
+        buttonCancel.setText("Cancel");
+        buttonOk.setDisable(buttonOkDisabled);
+        result = false;
         window.setTitle(title);
         label.setText(message);
         buttonPane.getChildren().clear();
