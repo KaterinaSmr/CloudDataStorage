@@ -1,4 +1,4 @@
-# DropboxProject
+# CloudDataStorage
 Cloud data storage, analogue of Dropbox or Google Drive
 
 ### This app uses:
