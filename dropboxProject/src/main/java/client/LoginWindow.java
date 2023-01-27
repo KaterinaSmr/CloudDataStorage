@@ -12,12 +12,13 @@ import javafx.stage.Stage;
 import common.*;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 
 
-public class LoginWindow implements ServerCommands {
+public class LoginWindow implements ServerCommands, ChannelDataExchanger {
     @FXML
     TextField loginField;
     @FXML
@@ -25,53 +26,92 @@ public class LoginWindow implements ServerCommands {
     @FXML
     Button btnLogin;
     @FXML
+    Button btnSignUp;
+    @FXML
     Label label;
-    private SocketChannel socket;
+    private SocketChannel socketChannel;
     private final String ADDR = "localhost";
     private final int PORT = 8189;
 
     @FXML
     public void onLogin (){
-        System.out.println("login pressed");
+        System.out.println("channel is open " + socketChannel.isOpen());
+
+        if (!socketChannel.isOpen()){
+            if (!initSocketChannel()){
+                label.setText("Server unavailable.Please try again later.");
+                return;
+            }
+        }
         try {
-            send(AUTH + SEPARATOR + loginField.getText() + SEPARATOR + passwordField.getText());
-
-            ByteBuffer buffer = ByteBuffer.allocate(256);
-            socket.read(buffer);
-            buffer.flip();
-            String s = "";
-            while (buffer.hasRemaining()){
-                s += (char) buffer.get();
+            sendMessage(socketChannel, AUTH, loginField.getText(), passwordField.getText());
+            if (readHeader(socketChannel, COMMAND_LENGTH).startsWith(AUTHSTATUS)) {
+                if (readInfo(socketChannel).startsWith(OK))
+                    openMainWindow(AUTH + SEPARATOR + loginField.getText() + SEPARATOR + passwordField.getText() + SEPARATOR);
+                else {
+                    label.setText(readMessage(socketChannel));
+                }
             }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
-            System.out.println("ответ:  " + s);
-            if (s.startsWith(AUTHOK)){
-                openMainWindow();
-            } else {
-                label.setText(s);
-            }
+    @FXML
+    public void onSignUp(){
+        try {
+            FXMLLoader fxmlLoader = new FXMLLoader(this.getClass().getResource("signUpWindow.fxml"));
+            Scene signUpScene = new Scene(fxmlLoader.load(), 340,300);
+            SignUpWindow signUpWindow = fxmlLoader.getController();
+            signUpWindow.setSocketChannel(socketChannel);
+
+            Stage signUpStage = new Stage();
+            signUpStage.setScene(signUpScene);
+            signUpStage.setTitle("Sign up");
+            signUpStage.show();
+            Stage currentStage = (Stage)btnLogin.getScene().getWindow();
+
+            signUpStage.setOnCloseRequest(windowEvent -> {
+                try {
+                    System.out.println("Stage is closing");
+                    signUpWindow.onExit();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    Platform.exit();
+                }
+            });
+            passwordField.clear();
+            label.setText("");
+            signUpWindow.setLoginStage(currentStage);
+            currentStage.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
     public LoginWindow() {
+           initSocketChannel();
+    }
+
+    public boolean initSocketChannel(){
         try {
-            socket = SocketChannel.open();
-            socket.connect(new InetSocketAddress(ADDR, PORT));
-            socket.configureBlocking(true);
+            socketChannel = SocketChannel.open();
+            socketChannel.connect(new InetSocketAddress(ADDR, PORT));
+            socketChannel.configureBlocking(true);
+            return true;
         } catch (IOException e) {
             e.printStackTrace();
+            return false;
         }
     }
 
-    private void openMainWindow(){
-        System.out.println("okey, opening main window");
+    private void openMainWindow(String authMessage){
         try {
             FXMLLoader fxmlLoader = new FXMLLoader(this.getClass().getResource("mainWindow.fxml"));
-            Scene mainWindowScene = new Scene(fxmlLoader.load(), 600,500);
+            Scene mainWindowScene = new Scene(fxmlLoader.load(), 700,500);
             MainWindow mainWindow = fxmlLoader.getController();
-            mainWindow.setSocketChannel(socket);
+            mainWindow.setSocketChannel(socketChannel, authMessage);
 
             Stage mainStage = new Stage();
             mainStage.setScene(mainWindowScene);
@@ -91,6 +131,9 @@ public class LoginWindow implements ServerCommands {
                     Platform.exit();
                 }
             });
+            passwordField.clear();
+            label.setText("");
+            mainWindow.setLoginStage(currentStage);
             currentStage.close();
             mainWindow.main();
         } catch (IOException e) {
@@ -98,16 +141,10 @@ public class LoginWindow implements ServerCommands {
         }
     }
 
-    private void send(String s) throws IOException{
-        ByteBuffer buffer = ByteBuffer.wrap(s.getBytes());
-        socket.write(buffer);
-        buffer.clear();
-    }
-
     public void onExit(){
         try {
-            send(END);
-            socket.close();
+            sendMessage(socketChannel, END);
+            socketChannel.close();
         } catch (IOException e) {
             e.printStackTrace();
         }

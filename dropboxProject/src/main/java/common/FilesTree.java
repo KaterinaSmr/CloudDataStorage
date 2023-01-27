@@ -1,5 +1,8 @@
 package common;
 
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+
 import java.io.File;
 import java.io.Serializable;
 import java.text.DateFormat;
@@ -9,10 +12,13 @@ import java.util.Date;
 import java.util.TimeZone;
 
 public class FilesTree implements Serializable {
-    private ArrayList<FilesTree> children;
+    private final ArrayList<FilesTree> children;
     private File file;
 
+    private ImageView icon;
+    private boolean isRoot = false;
     private String name;
+    private String displayName;
     private String type;
     private Long size;
     private String timestamp;
@@ -26,6 +32,7 @@ public class FilesTree implements Serializable {
         this.file = f;
         this.children = new ArrayList<>();
         this.name = f.getName();
+        this.icon = null;
         this.type = (isDirectory()? "Folder" : "File");
         this.size = f.length();
 
@@ -39,25 +46,24 @@ public class FilesTree implements Serializable {
             }
         }
     }
-    public FilesTree(File f, boolean isDir) {
-        this.file = f;
-        this.children = new ArrayList<>();
-        this.name = f.getName();
-        this.type = (isDir? "Folder" : "File");
-        this.size = f.length();
 
-        Date date = new Date(f.lastModified());
-        this.timestamp = formatter.format(date);
-
-        if (this.isDirectory()) {
-            File[] files = f.listFiles();
-            for (File fl : files) {
-                this.addChild(new FilesTree(fl));
-            }
-        }
+    public FilesTree(File f, String rootDisplayName) {
+        this(f);
+        this.isRoot = true;
+        this.displayName = rootDisplayName;
     }
+
+    public FilesTree(File f, boolean isDir, Image icon) {
+        this(f);
+        setDirectory(isDir);
+        setIcon(new ImageView(icon));
+    }
+
     public boolean isDirectory(){
         return file.isDirectory();
+    }
+    public void setDirectory(boolean isDir){
+        this.type = (isDir? "Folder" : "File");
     }
 
     public void addChild(FilesTree child){
@@ -78,24 +84,38 @@ public class FilesTree implements Serializable {
     }
 
     public FilesTree validateFile(String path){
-        FilesTree result = null;
-        if (this.getFile().getAbsolutePath().equals(path))
+        FilesTree result;
+        File file = new File(path);
+        if (this.getFile().getAbsolutePath().equals(file.getAbsolutePath()))
             return this;
         for (FilesTree f: this.getChildren()) {
             result = (f.validateFile(path));
             if (result != null) return result;
         }
-        return result;
+        return null;
     }
 
-    public void setFile(File file) {
-        this.file = file;
+    public void setIcon(ImageView icon){
+        this.icon = icon;
     }
 
     @Override
     public String toString() {
-        return this.getName();
+        return this.getDisplayName();
     }
+
+//    @Override
+//    public boolean equals(Object o) {
+//        if (this == o) return true;
+//        if (!(o instanceof FilesTree)) return false;
+//        FilesTree filesTree = (FilesTree) o;
+//        return file != null ? file.getAbsolutePath().equals(filesTree.file.getAbsolutePath()) : filesTree.file == null;
+//    }
+//
+//    @Override
+//    public int hashCode() {
+//        return file != null ? file.hashCode() : 0;
+//    }
 
     public ArrayList<FilesTree> getChildren() {
         return children;
@@ -111,5 +131,19 @@ public class FilesTree implements Serializable {
 
     public String getTimestamp() {
         return timestamp;
+    }
+
+    public ImageView getIcon(){ return icon;}
+
+    public String getDisplayName(){
+        if (isRoot) return displayName;
+        return getName();
+    }
+
+    public void printNode(){
+        System.out.println(this);
+        for (FilesTree f:this.getChildren()) {
+            f.printNode();
+        }
     }
 }

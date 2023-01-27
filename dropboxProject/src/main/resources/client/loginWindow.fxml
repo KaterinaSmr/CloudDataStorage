@@ -4,7 +4,7 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<VBox alignment="CENTER" prefHeight="300.0" prefWidth="300.0" spacing="10.0" xmlns="http://javafx.com/javafx/11.0.2" xmlns:fx="http://javafx.com/fxml/1" fx:controller="client.LoginWindow">
+<VBox alignment="CENTER" prefHeight="300.0" prefWidth="300.0" spacing="10.0" xmlns="http://javafx.com/javafx/16" xmlns:fx="http://javafx.com/fxml/1" fx:controller="client.LoginWindow">
    <children>
       <AnchorPane>
          <Label text="Login" AnchorPane.bottomAnchor="5.0" AnchorPane.leftAnchor="0.0" />
@@ -14,9 +14,13 @@
          <Label text="Password" AnchorPane.bottomAnchor="5.0" AnchorPane.leftAnchor="0.0" />
          <PasswordField fx:id="passwordField" prefHeight="26.0" prefWidth="138.0" styleClass="my-text" AnchorPane.rightAnchor="0.0" />
       </AnchorPane>
-
-      <Button fx:id="btnLogin" alignment="CENTER" defaultButton="true" mnemonicParsing="false" onAction="#onLogin" prefHeight="26.0" prefWidth="80.0" text="Login" />
-      <Label fx:id="label" />
+      <HBox alignment="CENTER" prefHeight="26.0" prefWidth="160.0" spacing="10.0">
+         <children>
+            <Button fx:id="btnLogin" alignment="CENTER" defaultButton="true" mnemonicParsing="false" onAction="#onLogin" prefHeight="26.0" prefWidth="95.0" text="Login" />
+            <Button fx:id="btnSignUp" alignment="CENTER" layoutX="10.0" layoutY="10.0" mnemonicParsing="false" onAction="#onSignUp" prefHeight="26.0" prefWidth="95.0" text="SignUp" />
+         </children>
+      </HBox>
+      <Label fx:id="label" textAlignment="CENTER" wrapText="true" />
    </children>
    <padding>
       <Insets left="50.0" right="50.0" top="40.0" />
