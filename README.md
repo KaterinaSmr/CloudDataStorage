@@ -12,3 +12,6 @@ Cloud data storage, analogue of Dropbox or Google Drive
 3) Add new user via "Sign Up" button
 (D:\Projects\j4DB\<userId> will be used for files storage by default)
 4) Log in to start using the app
+
+Видео-презентация проекта
+https://youtu.be/I4HUN7_Gu-g
