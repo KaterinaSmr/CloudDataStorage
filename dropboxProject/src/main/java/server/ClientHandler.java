@@ -13,7 +13,7 @@ public class ClientHandler implements ServerCommands, ChannelDataExchanger {
     private final Server serverChannel;
     private final SocketChannel socketChannel;
     private final AuthService authService;
-    private User user;
+    private User user=null;
     private final MyObjectOutputStream outObjStream;
     private File mainDirectory;
     private FilesTree rootNode;
@@ -24,9 +24,19 @@ public class ClientHandler implements ServerCommands, ChannelDataExchanger {
             this.outObjStream = new MyObjectOutputStream(socketChannel);
             this.authService =  authService;
     }
+
+    public User getUser() {
+        return user;
+    }
+
     public void read (){
         try {
-            String header = readHeader(socketChannel, COMMAND_LENGTH).substring(0,10);
+            String header = readHeader(socketChannel, COMMAND_LENGTH);
+            if (header.length() >= 10){
+                header = header.substring(0,10);
+            } else {
+                return;
+            }
             System.out.println("Echo: " + header);
             switch (header) {
                 case AUTH -> {
@@ -36,7 +46,7 @@ public class ClientHandler implements ServerCommands, ChannelDataExchanger {
                         System.out.println("login ok " + user.getId());
                         sendMessage(socketChannel, AUTHSTATUS, OK);
                         mainDirectory = user.getPath().toFile();
-                    } else sendMessage(socketChannel, AUTHSTATUS, NOK, "Wrong login/password");
+                    } else sendMessage(socketChannel, AUTHSTATUS, NOK, "Wrong login/password or user already logged in");
                 }
                 case GETFILELIST -> {
                     sendMessage(socketChannel, FILES_TREE, OK);
@@ -81,7 +91,7 @@ public class ClientHandler implements ServerCommands, ChannelDataExchanger {
                     sendMessage(socketChannel, INFO, "Unknown request");
                 }
             }
-        } catch (IOException e) {
+        } catch (StringIndexOutOfBoundsException | IOException e) {
             e.printStackTrace();
         }
     }

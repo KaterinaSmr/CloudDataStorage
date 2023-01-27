@@ -2,11 +2,12 @@ package server;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Objects;
 
 public class User {
-    private int id;
-    private String login;
-    private String password;
+    private final int id;
+    private final String login;
+    private final String password;
     private String timestamp;
     private Path path;
 
@@ -34,5 +35,16 @@ public class User {
         this.path = Paths.get(path);
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        User user = (User) o;
+        return id == user.id && Objects.equals(login, user.login);
+    }
 
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, login);
+    }
 }

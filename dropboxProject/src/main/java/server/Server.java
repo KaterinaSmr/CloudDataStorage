@@ -70,7 +70,11 @@ public class Server {
 
     public User authorizeMe(String login, String pass){
         try {
-            return authService.getUserByLoginPass(login,pass);
+            User user = authService.getUserByLoginPass(login,pass);
+            if (user!=null &&
+                    clients.stream().noneMatch(c -> c.getUser()!=null && c.getUser().equals(user))){
+                return user;
+            }
         } catch (SQLException e) {
             e.printStackTrace();
         }

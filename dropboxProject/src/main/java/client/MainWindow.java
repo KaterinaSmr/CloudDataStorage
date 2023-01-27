@@ -31,6 +31,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MainWindow implements ServerCommands, ChannelDataExchanger {
     @FXML
@@ -81,11 +82,11 @@ public class MainWindow implements ServerCommands, ChannelDataExchanger {
     private CountDownLatch waitingAllFiles;
     private int countFiles;
     private Stage loginStage;
-    private boolean isLoggedIn;
+    private AtomicBoolean isLoggedIn = new AtomicBoolean(false);
 
     public void main() {
         statusExchanger = new Exchanger<>();
-        isLoggedIn = true;
+        isLoggedIn.set(true);
         setupVisualElements();
 
         try {
@@ -95,7 +96,7 @@ public class MainWindow implements ServerCommands, ChannelDataExchanger {
         }
 
         Thread t1 = new Thread(() -> {
-                while (isLoggedIn) {
+                while (isLoggedIn.get()) {
                     try {
                         String header = readHeader(socketChannel, COMMAND_LENGTH).substring(0,10);
                         System.out.println("Header: " + header);
@@ -156,7 +157,7 @@ public class MainWindow implements ServerCommands, ChannelDataExchanger {
                         }
                     } catch (IOException e) {
                         e.printStackTrace();
-                        isLoggedIn = false;
+                        isLoggedIn.set(false);
                         try {
                             socketChannel.close();
                         } catch (IOException ex) {
@@ -170,7 +171,6 @@ public class MainWindow implements ServerCommands, ChannelDataExchanger {
                             thisStage.close();
                             loginStage.show();
                         });
-
                     } catch (Exception e) {
                         e.printStackTrace();
                         Platform.runLater(() -> {
@@ -524,8 +524,8 @@ public class MainWindow implements ServerCommands, ChannelDataExchanger {
     @FXML
     public void onLogoutButton() {
         messageWindow.show("Please confirm", "Are you sure to log out?", MessageWindow.Type.CONFIRMATION);
-        isLoggedIn = !messageWindow.getResult();
-        if (isLoggedIn) return;
+        isLoggedIn.set(!messageWindow.getResult());
+        if (isLoggedIn.get()) return;
         //close this window
         Stage thisStage = (Stage) logoutButton.getScene().getWindow();
         thisStage.close();
@@ -545,6 +545,7 @@ public class MainWindow implements ServerCommands, ChannelDataExchanger {
 
     public void onExit() {
         try {
+            isLoggedIn.set(false);
             sendMessage(socketChannel, END);
             socketChannel.close();
         } catch (IOException e) {

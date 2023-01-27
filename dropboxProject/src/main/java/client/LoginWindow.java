@@ -39,7 +39,6 @@ public class LoginWindow implements ServerCommands, ChannelDataExchanger {
 
         if (!socketChannel.isOpen()){
             if (!initSocketChannel()){
-                label.setWrapText(true);
                 label.setText("Server unavailable.Please try again later.");
                 return;
             }
@@ -50,7 +49,6 @@ public class LoginWindow implements ServerCommands, ChannelDataExchanger {
                 if (readInfo(socketChannel).startsWith(OK))
                     openMainWindow(AUTH + SEPARATOR + loginField.getText() + SEPARATOR + passwordField.getText() + SEPARATOR);
                 else {
-
                     label.setText(readMessage(socketChannel));
                 }
             }
